@@ -16,7 +16,7 @@
 - [x] Playtests: data loads; NaN/inf/overspend/bad names rejected; rate limit (10 of 60 burst allowed); save → restart → coins persisted; fake foreign lock → save refused + player kicked + data untouched; join while locked → kicked; stale lock (>210s) → auto-recovered
 - [x] StreamingEnabled = false (flight space is far from the character)
 - [x] Scripts exported to `src/` (20 files, byte-size verified against Studio)
-- [ ] git — **not installed on this PC**; user to install Git for Windows, then `git init` + first commit
+- [x] git initialized (branch `main`), first commit b47c428. `.rbxl` files ignored (place versions live on Roblox). Note: PowerShell needs PATH refresh in this session to find git.
 - Note: Edit-mode DataStore WRITES are forbidden for the MCP tool (502 Access forbidden); reads work. Do data fixes from the Server datamodel during a playtest.
 - Note: `[NEP...]` log lines come from a Studio plugin on the user's PC (not in the place). User asked to check Plugins → Manage Plugins.
 
@@ -24,7 +24,7 @@
 | Stage | Status | Gate approved |
 |---|---|---|
 | 0 Foundations | ✅ built & tested (git pending) | awaiting user |
-| 0.5 Style Test | ⏳ | — |
+| 0.5 Style Test | ✅ built (scene `Workspace.StyleTest`), style guide in 03 §1a | awaiting user |
 | 1 Flight Prototype | ⏳ | — |
 | 2 Flight Visuals Ch1 + Catch Presentation | ⏳ | — |
 | 3 Mood, Hazards, Return, Soundscape | ⏳ | — |

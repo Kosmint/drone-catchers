@@ -9,6 +9,28 @@
 - One consistent material language: smooth surfaces, metal + glass for tech, Neon for energy (beam, engines, creature accents), never random colors.
 - **Quality bar check (every visual gate):** take `screen_capture` of the scene, honestly judge: Would this look good as a Roblox game thumbnail? If not → iterate before showing the user.
 
+## 1a. STYLE GUIDE — the recipe from the Style Test (Stage 0.5)
+Reference scene: `Workspace.StyleTest` (camera at side, FOV 35, ~60 studs from the flight plane).
+
+**Lighting baseline (Low Sky):** ClockTime 15.2, Brightness 2.6, Ambient (120,110,140), OutdoorAmbient (175,160,190), EnvironmentDiffuse 1, EnvironmentSpecular 0.4, ShadowSoftness 0.5, Exposure +0.1. Atmosphere: Density 0.24, Offset 0.15, Color (255,220,205) peach, Decay (170,160,220) lavender, Glare 0.35, Haze 1.0. ColorCorrection: Sat +0.12, Contrast +0.06, Bright +0.02, Tint (255,250,245). Bloom: Intensity 0.4, Size 24, Threshold 1.35. SunRays 0.06. DepthOfField off in flight.
+
+**Models — who makes what:**
+- **Hand-built from parts** (ellipsoids via SpecialMesh Sphere, balls, cylinders, SmoothPlastic + Neon accents + Glass visors) for **creatures, drone, rocket, stations**: full control, consistent style, easy recolor for modifiers/rarity, animation-friendly, ~20–35 parts each.
+- **AI-generated meshes** (`generate_mesh`) for **organic environment pieces**: clouds (template `ReplicatedStorage.Assets.Sky.CloudMesh`, peach→lavender underside), later rocks, asteroids, planet bases. Always judged in-scene; reject anything that reads "plushie" or generic.
+- The AI creature/drone tests were rejected: AI creature too plushie-cute with legs, AI drone too thin/generic.
+
+**Readability rules (2.5D side view):**
+1. Models are posed **tilted toward the camera** (~10–18° pitch, ~12–22° yaw) so tops/faces are visible, never a flat profile.
+2. **Creatures get a soft outline** (Highlight, FillTransparency 1, OutlineTransparency ~0.45, outline tinted darker version of body color, DepthMode Occluded) + a tinted body (never pure white) so they pop on white clouds. Use Highlights only on nearby creatures (Roblox limit ~31 active).
+3. Creature size ≈ drone size (Cloud Puff ~5×4 studs at scale 1.3); rarer = slightly bigger + glow.
+4. Faces: modest natural eyes (white ellipse + dark pupil + tiny Neon shine), small peach cheek. Not giant kawaii eyes, no legs on flyers.
+5. Drone: white hull, peach accents, dark glass visor with cyan Neon "eye", ducted fans with visible blades, cyan beam nozzle with PointLight.
+
+**Composition rules (flight scene):**
+1. Keep the **flight band clear**: no clouds directly behind the action line; clouds above (high, scattered, stretched 1.2–1.8× wide) and below.
+2. Depth layers: framing cloud near one edge → low clouds rising from the sea → **dense continuous cloud sea** (flattened 0.45–0.6, overlapping, rows receding) → **hazy horizon bank** (huge, Transparency ~0.35) just below the action line to hide the horizon seam.
+3. Cloud yaw near 0°/180° (wide side to camera) ± 20°, random stretch for variety.
+
 ## 1b. Lessons from the browser demo (user feedback 2026-11-24)
 The 2D demo (https://claude.ai/artifact/L686j8cTiyJqbvFYGpZy5U) **movement and gameplay are approved**. Its visuals are explicitly NOT the target:
 - **Planets** (the ringed planet) looked "AI-ish" → in Roblox: real 3D low-poly planet models with hand-tuned facet colors, soft atmosphere rim glow (Highlight/transparent shell), proper ring with shadow and particles, slow rotation.
