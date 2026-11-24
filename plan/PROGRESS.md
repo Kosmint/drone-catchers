@@ -21,7 +21,16 @@ Must change:
   - Storm Layer: slate storm towers with anvil tops, dark undercast shelves, broken storm puffs, **rain** (near streaks + distant curtains).
   - Edge of Space: violet cloud deck below (storm-tower tops poke through), high cirrus streaks, **custom twinkling stars + faint galaxy band** (camera-locked = no parallax, only above the deck horizon). Roblox skybox stars off (`Sky.StarCount = 0`).
 - [x] Particle layers driven by the zone blend (`ZoneLighting.fxStars/fxRain`, emitters tagged `FxLayer`/`BaseRate`; camera-locked parts tagged `SkyLockY/Z/Roll`).
-- [ ] 3D low-poly Earth curve at Edge of Space
+### Stage 2 — art direction change (user, 2026-11-25): "3D clouds look AI-made" → painted 2.5D sky
+User showed two painted sunrise/sea-of-clouds references (style only — not copied; one is a film still, one a watermarked stock image).
+- [x] **Painted parallax sky** (`art/paint_sky.py`, original procedural paintings → uploaded decals): sky gradient + glowing sun with light pillar/glare + high wisps; cloud sea in 3 tileable layers (far bands → mid rolls → near billowy rolls with silver linings, lilac shadows, painterly colour steps). Cards in `FlightSpace.Chapter1.Painted`, moved by the parallax rig (attributes SkyLockY/Z, ParallaxX/Y, AnchorAlt) — camera never rotates so flat cards are perfect.
+- [x] Real sun placed behind the painted sun (Low Sky: clock 8.605, latitude −54.6) → warm back-light on drone/creatures. SunRays off where the sun is in frame (it washed the painting pink); Low Sky fog ≈ 0 (painting has its own haze); SurfaceGui Brightness 0.8 + CC contrast/saturation to beat tone-mapping wash-out.
+- [x] Old 3D clouds parked in `ServerStorage.OldScenery` (delete once the painted look is approved).
+- [x] Stars animated: twinkle pulses, slow rotation, size breathing, spinning glints, bright 4-point stars, shooting stars (painted sprites `star_glint`/`star_dot`).
+- [ ] Storm Layer painted set (dramatic sunset storm clouds: dark blue masses with glowing rims, rain) — currently plain fog + rain
+- [ ] Edge of Space painted set (deep gradient, curved atmosphere glow line, cloud deck far below) — currently plain dark sky + stars
+- [ ] Sun glow / lens flare overlay; painted floating clouds near the action plane; painted-layer transitions between zones
+- [ ] 3D low-poly Earth curve at Edge of Space (may become part of the painted Edge set)
 - [ ] Final Mission Control HUD (user: current one "AI-ish and simple")
 - [ ] Beam VFX, catch animation (squash/stretch, intake flash), celebration tiers T0–T5 + Catch Card
 - [ ] Scanner ("?" edge blips, Hidden reveal)

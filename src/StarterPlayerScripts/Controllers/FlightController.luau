@@ -65,10 +65,11 @@ local POSE = CFrame.Angles(math.rad(14), 0, 0) * CFrame.Angles(0, math.rad(-20),
 -- lighting ------------------------------------------------------------------
 local atmosphere: Atmosphere? = nil
 local colorCorrection: ColorCorrectionEffect? = nil
+local sunRays: SunRaysEffect? = nil
 local savedLighting: { [Instance]: { [string]: any } } = {}
 local lightingTimer = 0
 
-local LIGHT_PROPS = { "ClockTime", "Brightness", "Ambient", "OutdoorAmbient" }
+local LIGHT_PROPS = { "ClockTime", "GeographicLatitude", "Brightness", "Ambient", "OutdoorAmbient" }
 local ATMOS_PROPS = { "Density", "Offset", "Color", "Decay", "Glare", "Haze" }
 local CC_PROPS = { "Saturation", "Contrast", "Brightness", "TintColor" }
 
@@ -119,13 +120,24 @@ end
 -- particle layers in FlightSpace (stars, rain...) tagged with attribute FxLayer
 type FxEmitter = { emitter: ParticleEmitter, field: string, baseRate: number }
 local fxEmitters: { FxEmitter } = {}
--- sky layers that follow the camera (stars have no parallax); attributes SkyLockY/Z/Roll
-type SkyLock = { part: BasePart, y: number, z: number, roll: number }
+-- Parallax rig for painted sky layers and stars (camera never rotates, so flat cards work).
+-- Attributes on a BasePart: SkyLockY (offset from the camera eye at the anchor altitude),
+-- SkyLockZ (depth offset from the flight plane), ParallaxX/ParallaxY (0 = locked to the camera
+-- = infinitely far, 1 = fixed in the world), AnchorAlt, SkyLockRoll (degrees).
+type SkyLock = { part: BasePart, y: number, z: number, roll: number, kx: number, ky: number, anchorY: number }
 local skyLocks: { SkyLock } = {}
+-- painted images faded per zone: ImageLabels with attribute FxLayer (e.g. "skyLow" -> preset fxSkyLow)
+type FxImage = { label: ImageLabel, field: string }
+local fxImages: { FxImage } = {}
+
+local function fxField(layer: string): string
+	return "fx" .. string.upper(string.sub(layer, 1, 1)) .. string.sub(layer, 2)
+end
 
 local function collectFx()
 	table.clear(fxEmitters)
 	table.clear(skyLocks)
+	table.clear(fxImages)
 	local space = workspace:FindFirstChild("FlightSpace")
 	if not space then return end
 	for _, d in space:GetDescendants() do
@@ -135,15 +147,18 @@ local function collectFx()
 				y = d:GetAttribute("SkyLockY") :: number,
 				z = (d:GetAttribute("SkyLockZ") or -500) :: number,
 				roll = math.rad((d:GetAttribute("SkyLockRoll") or 0) :: number),
+				kx = (d:GetAttribute("ParallaxX") or 0) :: number,
+				ky = (d:GetAttribute("ParallaxY") or 0) :: number,
+				anchorY = ORIGIN.Y + ((d:GetAttribute("AnchorAlt") or 0) :: number),
 			})
+		elseif d:IsA("ImageLabel") and typeof(d:GetAttribute("FxLayer")) == "string" then
+			table.insert(fxImages, { label = d, field = fxField(d:GetAttribute("FxLayer") :: string) })
 		end
 		if d:IsA("ParticleEmitter") then
 			local layer = d:GetAttribute("FxLayer")
 			local base = d:GetAttribute("BaseRate")
 			if typeof(layer) == "string" and typeof(base) == "number" then
-				-- "stars" -> preset field "fxStars"
-				local field = "fx" .. string.upper(string.sub(layer, 1, 1)) .. string.sub(layer, 2)
-				table.insert(fxEmitters, { emitter = d, field = field, baseRate = base })
+				table.insert(fxEmitters, { emitter = d, field = fxField(layer), baseRate = base })
 			end
 		end
 	end
@@ -154,6 +169,11 @@ local function applyLighting(p: ZoneLighting.Preset)
 		local w = (p :: any)[fx.field]
 		fx.emitter.Rate = fx.baseRate * (if typeof(w) == "number" then w else 0)
 	end
+	for _, fi in fxImages do
+		local w = (p :: any)[fi.field]
+		fi.label.ImageTransparency = 1 - math.clamp(if typeof(w) == "number" then w else 0, 0, 1)
+	end
+	Lighting.GeographicLatitude = p.latitude
 	Lighting.ClockTime = p.clockTime
 	Lighting.Brightness = p.brightness
 	Lighting.Ambient = p.ambient
@@ -165,6 +185,9 @@ local function applyLighting(p: ZoneLighting.Preset)
 		atmosphere.Decay = p.atmosDecay
 		atmosphere.Glare = p.atmosGlare
 		atmosphere.Haze = p.atmosHaze
+	end
+	if sunRays then
+		sunRays.Intensity = p.sunRays
 	end
 	if colorCorrection then
 		colorCorrection.Saturation = p.ccSaturation
@@ -261,9 +284,11 @@ function FlightController.begin(run: any)
 
 	atmosphere = Lighting:FindFirstChildOfClass("Atmosphere")
 	colorCorrection = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+	sunRays = Lighting:FindFirstChildOfClass("SunRaysEffect")
 	snapshot(Lighting, LIGHT_PROPS)
 	snapshot(atmosphere, ATMOS_PROPS)
 	snapshot(colorCorrection, CC_PROPS)
+	snapshot(sunRays, { "Intensity" })
 	collectFx()
 	applyLighting(presetAt(state.chapter, state.y))
 	lightingTimer = 0
@@ -282,6 +307,8 @@ function FlightController.finish()
 		fx.emitter:Clear()
 	end
 	table.clear(fxEmitters)
+	table.clear(fxImages)
+	table.clear(skyLocks)
 	restoreLighting()
 end
 
@@ -380,7 +407,9 @@ function FlightController.updateSky()
 	if #skyLocks == 0 then return end
 	local cam = workspace.CurrentCamera.CFrame.Position
 	for _, s in skyLocks do
-		s.part.CFrame = CFrame.new(cam.X, cam.Y + s.y, ORIGIN.Z + s.z) * CFrame.Angles(0, 0, s.roll)
+		local x = cam.X + (ORIGIN.X - cam.X) * s.kx
+		local y = cam.Y + s.y + (s.anchorY - cam.Y) * s.ky
+		s.part.CFrame = CFrame.new(x, y, ORIGIN.Z + s.z) * CFrame.Angles(0, 0, s.roll)
 	end
 end
 

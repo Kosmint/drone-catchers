@@ -1,9 +1,11 @@
 --!strict
--- Basic per-zone lighting presets, blended by altitude in flight (Stage 1).
--- Stage 2 replaces these with full presets (Sky, SunRays, Bloom, parallax layers).
--- LowSky = the approved Style Test baseline (plan/03_ART_AND_AUDIO.md §1a).
+-- Per-zone lighting presets, blended by altitude in flight.
+-- Low Sky uses the painted sky (Workspace.FlightSpace.Chapter1.Painted): the real sun is placed
+-- right behind the painted sun (clock 8.605 at latitude -54.6 -> sun dir ≈ (0.16, 0.13, -0.98)),
+-- so the drone and creatures are warmly back-lit like the painting.
 export type Preset = {
 	clockTime: number,
+	latitude: number, -- Lighting.GeographicLatitude (with clockTime = sun position)
 	brightness: number,
 	ambient: Color3,
 	outdoorAmbient: Color3,
@@ -17,34 +19,41 @@ export type Preset = {
 	ccContrast: number,
 	ccBrightness: number,
 	ccTint: Color3,
-	-- weights for particle layers in FlightSpace (ParticleEmitters with attribute FxLayer = "stars"/"rain")
+	sunRays: number, -- SunRaysEffect.Intensity (0 where the sun is in frame: it washes the painting out)
+	-- weights for FlightSpace layers: ParticleEmitters (attribute FxLayer + BaseRate -> Rate)
+	-- and painted ImageLabels (attribute FxLayer -> ImageTransparency = 1 - weight)
 	fxStars: number,
 	fxRain: number,
+	fxSkyLow: number,
 }
 
 local rgb = Color3.fromRGB
 local presets: { [string]: Preset } = {
 	LowSky = {
-		clockTime = 15.2, brightness = 2.6, ambient = rgb(120, 110, 140), outdoorAmbient = rgb(175, 160, 190),
-		atmosDensity = 0.24, atmosOffset = 0.15, atmosColor = rgb(255, 220, 205), atmosDecay = rgb(170, 160, 220),
-		atmosGlare = 0.35, atmosHaze = 1,
-		ccSaturation = 0.12, ccContrast = 0.06, ccBrightness = 0.02, ccTint = rgb(255, 250, 245),
-		fxStars = 0, fxRain = 0,
+		clockTime = 8.605, latitude = -54.6, brightness = 2.4,
+		ambient = rgb(138, 126, 168), outdoorAmbient = rgb(196, 178, 210),
+		atmosDensity = 0.02, atmosOffset = 0, atmosColor = rgb(255, 224, 206), atmosDecay = rgb(186, 170, 226),
+		atmosGlare = 0, atmosHaze = 0,
+		ccSaturation = 0.12, ccContrast = 0.14, ccBrightness = 0, ccTint = rgb(255, 248, 242),
+		sunRays = 0,
+		fxStars = 0, fxRain = 0, fxSkyLow = 1,
 	},
 	StormLayer = {
-		clockTime = 15.2, brightness = 1.5, ambient = rgb(95, 100, 125), outdoorAmbient = rgb(120, 125, 150),
+		clockTime = 15.2, latitude = 35, brightness = 1.5, ambient = rgb(95, 100, 125), outdoorAmbient = rgb(120, 125, 150),
 		atmosDensity = 0.38, atmosOffset = 0.1, atmosColor = rgb(160, 168, 190), atmosDecay = rgb(92, 100, 132),
 		atmosGlare = 0, atmosHaze = 2.2,
 		ccSaturation = -0.18, ccContrast = 0.14, ccBrightness = -0.03, ccTint = rgb(220, 228, 245),
-		fxStars = 0, fxRain = 1,
+		sunRays = 0,
+		fxStars = 0, fxRain = 1, fxSkyLow = 0,
 	},
 	EdgeOfSpace = {
 		-- low sun + dark atmosphere = deep violet sky with a thin glowing horizon
-		clockTime = 18.25, brightness = 3, ambient = rgb(110, 100, 160), outdoorAmbient = rgb(150, 135, 200),
+		clockTime = 18.25, latitude = 35, brightness = 3, ambient = rgb(110, 100, 160), outdoorAmbient = rgb(150, 135, 200),
 		atmosDensity = 0.32, atmosOffset = 0.05, atmosColor = rgb(70, 70, 150), atmosDecay = rgb(30, 25, 80),
 		atmosGlare = 0.8, atmosHaze = 0,
 		ccSaturation = 0.1, ccContrast = 0.12, ccBrightness = 0.02, ccTint = rgb(230, 222, 255),
-		fxStars = 1, fxRain = 0,
+		sunRays = 0,
+		fxStars = 1, fxRain = 0, fxSkyLow = 0,
 	},
 }
 
