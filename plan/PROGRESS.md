@@ -27,7 +27,10 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [x] Real sun placed behind the painted sun (Low Sky: clock 8.605, latitude −54.6) → warm back-light on drone/creatures. SunRays off where the sun is in frame (it washed the painting pink); Low Sky fog ≈ 0 (painting has its own haze); SurfaceGui Brightness 0.8 + CC contrast/saturation to beat tone-mapping wash-out.
 - [x] Old 3D clouds parked in `ServerStorage.OldScenery` (delete once the painted look is approved).
 - [x] Stars animated: twinkle pulses, slow rotation, size breathing, spinning glints, bright 4-point stars, shooting stars (painted sprites `star_glint`/`star_dot`).
-- [ ] Storm Layer painted set (dramatic sunset storm clouds: dark blue masses with glowing rims, rain) — currently plain fog + rain
+- [x] Cloud sea rebuilt as 10 thin parallax bands (no visible layer seams when climbing).
+- [x] Low Sky floating clouds = real 3D clusters (approved cloud mesh, cream tint) in `FlightSpace.Chapter1.Clouds3D` (user: must be 3D, not painted cards).
+- [x] Storm Layer (user reference: dark grey storm clouds; sunset/orange version rejected): volumetric-style painted grey-teal layers + overhead ceiling (`PaintedStorm`), grey mist bands scrolling, rain; **StormController**: lightning flash every 4–10 s (double flicker, cards brighten, bolt sprite, small shake); 30% of flashes back-light a giant **sky-whale** silhouette gliding behind the clouds.
+- [ ] Storm: sound + lightning strike hazard (Stage 3); whale silhouette could get a nicer second pass.
 - [ ] Edge of Space painted set (deep gradient, curved atmosphere glow line, cloud deck far below) — currently plain dark sky + stars
 - [ ] Sun glow / lens flare overlay; painted floating clouds near the action plane; painted-layer transitions between zones
 - [ ] 3D low-poly Earth curve at Edge of Space (may become part of the painted Edge set)

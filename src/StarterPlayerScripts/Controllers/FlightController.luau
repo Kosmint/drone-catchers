@@ -129,6 +129,10 @@ local skyLocks: { SkyLock } = {}
 -- painted images faded per zone: ImageLabels with attribute FxLayer (e.g. "skyLow" -> preset fxSkyLow)
 type FxImage = { label: ImageLabel, field: string, base: number }
 local fxImages: { FxImage } = {}
+-- scrolling textures (drifting mist): ImageLabels with attribute ScrollSpeed (studs/s); label is one tile wider than its card
+type Scroller = { label: ImageLabel, perSec: number, period: number }
+local scrollers: { Scroller } = {}
+local scrollT = 0
 
 local function fxField(layer: string): string
 	return "fx" .. string.upper(string.sub(layer, 1, 1)) .. string.sub(layer, 2)
@@ -138,6 +142,7 @@ local function collectFx()
 	table.clear(fxEmitters)
 	table.clear(skyLocks)
 	table.clear(fxImages)
+	table.clear(scrollers)
 	local space = workspace:FindFirstChild("FlightSpace")
 	if not space then return end
 	for _, d in space:GetDescendants() do
@@ -159,6 +164,11 @@ local function collectFx()
 				d:SetAttribute("BaseTransparency", base)
 			end
 			table.insert(fxImages, { label = d, field = fxField(d:GetAttribute("FxLayer") :: string), base = base :: number })
+			local speed = d:GetAttribute("ScrollSpeed")
+			local card = d:FindFirstAncestorWhichIsA("BasePart")
+			if typeof(speed) == "number" and card then
+				table.insert(scrollers, { label = d, perSec = speed / card.Size.X, period = d.Size.X.Scale - 1 })
+			end
 		end
 		if d:IsA("ParticleEmitter") then
 			local layer = d:GetAttribute("FxLayer")
@@ -170,7 +180,16 @@ local function collectFx()
 	end
 end
 
+local lastPreset: any = nil
+
+-- current blended value of a preset field (e.g. "fxSkyStorm" = how much of the storm set is in view)
+function FlightController.weight(field: string): number
+	local v = lastPreset and lastPreset[field]
+	return if typeof(v) == "number" then v else 0
+end
+
 local function applyLighting(p: ZoneLighting.Preset)
+	lastPreset = p
 	for _, fx in fxEmitters do
 		local w = (p :: any)[fx.field]
 		fx.emitter.Rate = fx.baseRate * (if typeof(w) == "number" then w else 0)
@@ -411,6 +430,12 @@ end
 
 -- call after the camera moved this frame
 function FlightController.updateSky()
+	scrollT = state.t
+	for _, s in scrollers do
+		if s.period > 0 then
+			s.label.Position = UDim2.fromScale(-((scrollT * s.perSec) % s.period), 0)
+		end
+	end
 	if #skyLocks == 0 then return end
 	local cam = workspace.CurrentCamera.CFrame.Position
 	for _, s in skyLocks do

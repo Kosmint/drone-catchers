@@ -664,7 +664,477 @@ def float_clouds(n=5):
         save("cloud%02d" % (k + 1), col, mask, size=(1024, 576))
 
 
+# --------------------------------------------------------------------------- storm layer (sunset)
+
+PAL_STORM_BODY = [
+    (0.00, hexc("1b1f45")), (0.3, hexc("2a3063")), (0.55, hexc("3d3f7c")), (0.8, hexc("5a4f8e")), (1.0, hexc("7a5f98")),
+]
+PAL_STORM_RIM = [(0.0, hexc("c65a8a")), (0.45, hexc("ff8a5c")), (0.8, hexc("ffc07a")), (1.0, hexc("fff0c8"))]
+STORM_SUN = (0.38, 0.62)  # sun position in the storm backdrop (fractions), low on the horizon
+
+
+def sky_storm():
+    W, H = 2048, 896
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    v = yy / H
+    hz = 0.62
+    col = ramp(v / hz, [
+        (0.00, hexc("1c1d4d")), (0.3, hexc("3a2f74")), (0.55, hexc("8a4a8f")),
+        (0.75, hexc("e26a7e")), (0.9, hexc("ff9e5e")), (1.0, hexc("ffcf7a")),
+    ])
+    below = ramp((v - hz) / (1 - hz), [(0, hexc("ffc276")), (0.3, hexc("c86a7a")), (1, hexc("3a2c5e"))])
+    col = np.where((v < hz)[..., None], col, below)
+    sx, sy = W * STORM_SUN[0], H * STORM_SUN[1]
+    dx, dy = (xx - sx) / W, (yy - sy) / H
+    r = np.sqrt(dx * dx + (dy * 0.6) ** 2)
+    glow = np.exp(-(r / 0.04) ** 2) + np.exp(-(r / 0.14) ** 2) * 0.6 + np.exp(-(r / 0.4) ** 2) * 0.35
+    col = col + np.clip(glow, 0, 1)[..., None] * (hexc("fff1cf") - col) * np.clip(glow, 0, 1)[..., None]
+    # horizontal streaks of lit cloud in the glow (like sunset cirrus)
+    st = fbm(H, W, 71, beta=2.4, ax=9.0)
+    sm = smoothstep(0.6, 0.8, st) * smoothstep(hz - 0.32, hz - 0.12, v) * smoothstep(hz + 0.02, hz - 0.06, v)
+    scol = ramp(np.clip(1 - r * 2.2, 0, 1), [(0, hexc("b85a86")), (0.5, hexc("ff9a6a")), (1, hexc("ffe0a0"))])
+    col = col * (1 - sm[..., None] * 0.7) + scol * sm[..., None] * 0.7
+    col = col + (fbm(H, W, 72, beta=1.2) - 0.5)[..., None] * 0.015
+    save("sky_storm", col, size=(1024, 448))
+
+
+def storm_towers(name, seed, W, H, towers, base_frac, height_rng, width_rng, haze, rim_gain, sun_x_frac):
+    """Cumulonimbus towers with anvil tops, dark blue bodies, sunset rims (tileable in X)."""
+    rng = np.random.default_rng(seed)
+    blobs = []
+    for i in range(towers):
+        x = (i + rng.uniform(0.1, 0.9)) * W / towers
+        tw = W * rng.uniform(*width_rng)
+        th = H * rng.uniform(*height_rng)
+        base_y = H * base_frac
+        lean = rng.uniform(0.05, 0.2) * tw
+        # cumulonimbus profile: width (fraction of tw) along the height t=0 (base) .. 1 (anvil top)
+        def width_at(t):
+            body = 1.0 + 0.25 * np.sin(t * np.pi * 0.9)        # bulging body
+            neck = 1 - 0.25 * np.exp(-((t - 0.78) / 0.06) ** 2)  # slight neck under the anvil
+            anvil = 1 + 0.9 * smoothstep(0.8, 0.95, t)          # wide flat anvil
+            return body * neck * anvil
+        step = tw * 0.1
+        n_levels = max(4, int(th / step))
+        for j in range(n_levels + 1):
+            t = j / n_levels
+            wdt = tw * width_at(t) * rng.uniform(0.75, 1.2)          # wobbly sides
+            cx = x + lean * t + (0.35 * tw * smoothstep(0.8, 1.0, t)) + rng.uniform(-0.08, 0.08) * tw
+            k = max(2, int(wdt / (tw * 0.22)))
+            anvil = t > 0.85
+            for q in range(k):
+                bx = cx - wdt / 2 + wdt * (q + 0.5) / k + rng.uniform(-0.06, 0.06) * tw
+                r = tw * rng.uniform(0.15, 0.25) * (0.55 if anvil else 1.0)
+                by = base_y - t * th + (r * 0.5 if anvil else 0)       # thin, flat anvil
+                blobs.append((bx, by, r, 1.0))
+        # rounded cumulus dome where the body meets the anvil (not a flat mesa)
+        for q in range(4):
+            blobs.append((x + lean * 0.75 + rng.uniform(-0.3, 0.3) * tw, base_y - 0.8 * th + rng.uniform(-0.04, 0.02) * H,
+                          tw * rng.uniform(0.18, 0.26), 1.0))
+    for _ in range(towers * 6):  # low lumpy clouds between towers
+        blobs.append((rng.uniform(0, W), H * base_frac + rng.uniform(0.0, 0.08) * H, W * rng.uniform(0.03, 0.06), 1.0))
+    B0 = blob_field(H, W, blobs)
+    m0 = B0 > 0.45
+    # billows on every edge (top + both sides), pushed slightly inward
+    sub = []
+    for shift, axis, dx_, dy_ in ((6, 0, 0, 0.4), (6, 1, 0.4, 0), (-6, 1, -0.4, 0)):
+        edge = m0 & ~np.roll(m0, shift, axis=axis)
+        ey, ex = np.nonzero(edge)
+        if len(ey) == 0:
+            continue
+        for idx in rng.choice(len(ey), size=min(130, len(ey)), replace=False):
+            r = W * rng.uniform(0.008, 0.024)
+            sub.append((ex[idx] + r * dx_, ey[idx] + r * dy_, r, 0.9))
+    # inner bulges so the mass reads as heaped billows
+    iy, ix = np.nonzero(m0[:: 8, :: 8])
+    if len(iy):
+        for idx in rng.choice(len(iy), size=min(120, len(iy)), replace=False):
+            sub.append((ix[idx] * 8, iy[idx] * 8, W * rng.uniform(0.015, 0.035), 0.5))
+    B = B0 + blob_field(H, W, sub) + (fbm(H, W, seed + 1, beta=1.6) - 0.5) * 0.2
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    v = yy / H
+    mask = smoothstep(0.42, 0.52, B) * smoothstep(1.0, 0.97, v) + smoothstep(base_frac + 0.05, base_frac + 0.12, v)
+    mask = np.clip(mask, 0, 1)
+    # outward normal of the silhouette -> rim where it faces the low sun (behind, at sun_x)
+    ms = gaussian_filter(mask, 4.0)
+    gy, gx = np.gradient(ms)
+    nl = np.sqrt(gx * gx + gy * gy) + 1e-6
+    nxo, nyo = -gx / nl, -gy / nl
+    sdx, sdy = (W * sun_x_frac - xx), (H * 0.95 - yy)
+    sl = np.sqrt(sdx * sdx + sdy * sdy) + 1e-6
+    facing = np.clip((nxo * sdx / sl + nyo * sdy / sl) * 0.6 + 0.55, 0, 1)
+    edge_band = np.clip((1 - gaussian_filter(mask, 7.0)) * mask * 2.6, 0, 1)
+    rim = np.clip(edge_band * (0.35 + 0.65 * facing) * rim_gain, 0, 1)
+    # body: darker toward the bottom, billow light from the smoothed mass
+    Bs = gaussian_filter(B, 10)
+    top_lit = np.clip(np.gradient(Bs, axis=0) * 40, 0, 1)
+    lump = fbm(H, W, seed + 2, beta=2.3, ax=1.3)
+    body_v = np.clip(0.35 + 0.35 * top_lit + (lump - 0.5) * 0.3 - 0.35 * smoothstep(0.3, 1.0, v), 0, 1)
+    body_v = painterly_steps(body_v, 6, lump, jitter=0.12, soft=0.6)
+    col = ramp(body_v, PAL_STORM_BODY)
+    rcol = ramp(painterly_steps(rim, 5, lump, jitter=0.1, soft=0.5), PAL_STORM_RIM)
+    rw = np.clip(rim * 1.4, 0, 1)[..., None]
+    col = col * (1 - rw) + rcol * rw
+    # aerial haze toward the sunset
+    col = col * (1 - haze) + hexc("b9658c") * haze
+    col = col + (fbm(H, W, seed + 3, beta=1.7, ax=6.0) - 0.5)[..., None] * 0.025
+    save(name, col, mask, size=(1024, int(1024 * H / W)))
+
+
+def _dome_mask(H, W, rng, cx, base_y, width, height, wrap=True):
+    """One rounded cumulus dome (hump-profile billows + edge sub-billows). Returns field B."""
+    blobs = []
+    for j in range(rng.integers(7, 12)):
+        u = rng.uniform(-1, 1)
+        hump = 1 - abs(u) ** 1.6
+        r = width * rng.uniform(0.14, 0.24) * (0.7 + 0.5 * hump)
+        blobs.append((cx + u * width * 0.42, base_y - hump * height * rng.uniform(0.55, 0.85) + r * 0.3, r, 1.0))
+    for j in range(5):  # broad body under the dome
+        blobs.append((cx + (j - 2) * width * 0.2, base_y + height * 0.15, width * 0.2, 1.0))
+    B0 = blob_field(H, W, blobs, wrap=wrap)
+    m0 = B0 > 0.45
+    edge = m0 & ~np.roll(m0, 5, axis=0)
+    ey, ex = np.nonzero(edge)
+    sub = []
+    if len(ey):
+        for idx in rng.choice(len(ey), size=min(45, len(ey)), replace=False):
+            r = width * rng.uniform(0.04, 0.09)
+            sub.append((ex[idx], ey[idx] + r * 0.45, r, 0.9))
+    return B0 + blob_field(H, W, sub, wrap=wrap)
+
+
+def storm_towers2(name, seed, W, H, towers, base_frac, height_rng, width_rng, haze, sun_x_frac):
+    """Towering storm clouds painted as cascades of domes (top first, lower/nearer domes over them)."""
+    rng = np.random.default_rng(seed)
+    col = np.zeros((H, W, 3), np.float32)
+    alpha = np.zeros((H, W), np.float32)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    lumpN = fbm(H, W, seed + 2, beta=2.3, ax=1.3)
+    grain = fbm(H, W, seed + 3, beta=1.7, ax=6.0) - 0.5
+
+    def over(c, a):
+        nonlocal col, alpha
+        out_a = a + alpha * (1 - a)
+        col = (c * a[..., None] + col * (alpha * (1 - a))[..., None]) / np.maximum(out_a, 1e-5)[..., None]
+        alpha = out_a
+
+    def shade(B, depth_t):
+        mask = smoothstep(0.42, 0.52, B + (lumpN - 0.5) * 0.15)
+        ms = gaussian_filter(mask, 4.0)
+        gy, gx = np.gradient(ms)
+        nl = np.sqrt(gx * gx + gy * gy) + 1e-6
+        sdx, sdy = (W * sun_x_frac - xx), (H * 0.98 - yy)
+        sl = np.sqrt(sdx * sdx + sdy * sdy) + 1e-6
+        facing = np.clip(((-gx / nl) * sdx / sl + (-gy / nl) * sdy / sl) * 0.6 + 0.5, 0, 1)
+        edge_band = np.clip((1 - gaussian_filter(mask, 5.0)) * mask * 2.2, 0, 1)
+        top = np.clip(-gaussian_filter(np.gradient(mask, axis=0), 3) * 30, 0, 1)
+        # rim light only where the edge faces the sun / the sky above (no all-round outline)
+        rim = np.clip(edge_band * np.clip((top - 0.25) * 2.0, 0, 1) * (0.55 + 0.45 * facing), 0, 1) * 0.85
+        Bs = gaussian_filter(B, 14)
+        lit = np.clip(np.gradient(Bs, axis=0) * 45, 0, 1)
+        v = np.clip(0.28 + 0.4 * lit + (lumpN - 0.5) * 0.22 - 0.25 * depth_t, 0, 1)
+        c = ramp(painterly_steps(v, 6, lumpN, jitter=0.12, soft=0.6), PAL_STORM_BODY)
+        rc = ramp(painterly_steps(rim, 5, lumpN, jitter=0.1, soft=0.5), PAL_STORM_RIM)
+        rw = np.clip(rim * 1.5, 0, 1)[..., None]
+        c = c * (1 - rw) + rc * rw
+        return c * (1 - haze) + hexc("b9658c") * haze, mask
+
+    order = []
+    for i in range(towers):
+        x = (i + rng.uniform(0.15, 0.85)) * W / towers
+        tw = W * rng.uniform(*width_rng)
+        th = H * rng.uniform(*height_rng)
+        order.append((x, tw, th))
+    for (x, tw, th) in order:
+        base_y = H * base_frac
+        top_y = base_y - th
+        # wispy anvil behind everything: long flat streak downwind of the top
+        streak = fbm(H, W, seed + int(x), beta=2.2, ax=7.0)
+        band = np.exp(-((yy - (top_y + th * 0.12)) / (H * 0.03)) ** 2)
+        span = smoothstep(x - tw * 0.7, x - tw * 0.3, xx) * smoothstep(x + tw * 1.8, x + tw * 0.8, xx)
+        a_anv = np.clip(smoothstep(0.35, 0.6, streak) * band * span * 1.2 + band * span * 0.35, 0, 1) * 0.95
+        anv_rim = np.clip(-np.gradient(gaussian_filter(a_anv, 3), axis=0) * 40, 0, 1)
+        c_anv = ramp(np.clip(0.55 + 0.4 * anv_rim, 0, 1), PAL_STORM_BODY)
+        c_anv = c_anv * (1 - anv_rim[..., None]) + ramp(anv_rim, PAL_STORM_RIM) * anv_rim[..., None]
+        over(c_anv * (1 - haze) + hexc("b9658c") * haze, a_anv)
+        # domes from the top (smallest, furthest) down to the base (widest, nearest)
+        n = rng.integers(3, 5)
+        for d in range(n):
+            t = d / max(n - 1, 1)
+            w_d = tw * (0.85 + 0.4 * t) * rng.uniform(0.92, 1.08)
+            y_d = top_y + th * (0.32 + 0.66 * t)
+            cx = x + rng.uniform(-0.08, 0.08) * tw
+            B = _dome_mask(H, W, rng, cx, y_d, w_d, th * 0.5)
+            c, m = shade(B, t)
+            over(c, m)
+    # low lumpy clouds along the base
+    B = blob_field(H, W, [(rng.uniform(0, W), H * base_frac + rng.uniform(0.02, 0.1) * H, W * rng.uniform(0.04, 0.07), 1.0)
+                          for _ in range(towers * 8)])
+    c, m = shade(B, 1.0)
+    over(c, np.clip(m + smoothstep(base_frac + 0.08, base_frac + 0.14, yy / H), 0, 1))
+    col = np.clip(col + grain[..., None] * 0.025, 0, 1)
+    save(name, col, alpha, size=(1024, int(1024 * H / W)))
+
+
+def storm_set():
+    sky_storm()
+    # taller canvases (1.5x) with the tower bases in the middle: the solid fill below the bases
+    # reaches past the next layer, so no strips of sky show between layers
+    storm_towers2("storm_far", 61, 2048, 1536, towers=3, base_frac=0.5, height_rng=(0.3, 0.41),
+                  width_rng=(0.12, 0.16), haze=0.4, sun_x_frac=0.38)
+    storm_towers2("storm_mid", 62, 2048, 1536, towers=2, base_frac=0.53, height_rng=(0.37, 0.47),
+                  width_rng=(0.16, 0.2), haze=0.18, sun_x_frac=0.38)
+    storm_towers2("storm_near", 63, 2048, 1152, towers=2, base_frac=0.5, height_rng=(0.23, 0.33),
+                  width_rng=(0.2, 0.26), haze=0.04, sun_x_frac=0.38)
+
+
+# --- storm v2: cold grey-teal thunderstorm (user reference: dark billowing clouds, bright gap, lightning)
+PAL_STORM_GREY = [
+    (0.00, hexc("141b1f")), (0.2, hexc("26323a")), (0.42, hexc("3e4e56")),
+    (0.62, hexc("62757c")), (0.8, hexc("95a8ab")), (0.92, hexc("c4d4d3")), (1.0, hexc("e6f0ee")),
+]
+
+
+def sky_storm2():
+    W, H = 2048, 896
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    gx, gy = W * 0.55, H * 0.3  # bright gap in the clouds (upper middle)
+    d = np.sqrt(((xx - gx) / W) ** 2 + ((yy - gy) / H * 0.7) ** 2)
+    n1 = fbm(H, W, 201, beta=2.4, ax=1.6)
+    n2 = fbm(H, W, 202, beta=1.8, ax=1.2)
+    light = np.exp(-(d / 0.28) ** 2) * 0.85 + (n1 - 0.5) * 0.5 + (n2 - 0.5) * 0.2 + 0.25
+    val = painterly_steps(np.clip(light, 0, 1), 8, n2, jitter=0.1, soft=0.7)
+    save("sky_storm2", ramp(val, PAL_STORM_GREY), size=(1024, 448))
+
+
+def storm_heap(name, seed, W, H, base_frac, rows, dome_w, dome_h, blur, haze, gap_x=0.55, light=1.0):
+    """Rows of heaped cauliflower storm domes (grey), lit from a bright gap above; solid below."""
+    rng = np.random.default_rng(seed)
+    col = np.zeros((H, W, 3), np.float32)
+    alpha = np.zeros((H, W), np.float32)
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    lumpN = fbm(H, W, seed + 2, beta=2.3, ax=1.2)
+    fluff = fbm(H, W, seed + 4, beta=1.5, ax=1.0)  # fine cotton texture
+
+    def over(c, a):
+        nonlocal col, alpha
+        out_a = a + alpha * (1 - a)
+        col = (c * a[..., None] + col * (alpha * (1 - a))[..., None]) / np.maximum(out_a, 1e-5)[..., None]
+        alpha = out_a
+
+    for r_i in range(rows):  # back rows first (higher on the canvas), nearer rows lower and over them
+        t = r_i / max(rows - 1, 1)
+        y_base = H * (base_frac - 0.12 * (1 - t))
+        n = int(W / (dome_w * W * 0.75)) + 1
+        for k in range(n):
+            cx = (k + rng.uniform(0, 1)) * W / n
+            w = dome_w * W * rng.uniform(0.8, 1.3)
+            h = dome_h * H * rng.uniform(0.7, 1.3) * (1 + 0.4 * rng.uniform() ** 3)  # a few tall heaps
+            B = _dome_mask(H, W, rng, cx, y_base + rng.uniform(-0.03, 0.03) * H, w, h)
+            # soft, fluffy volume: wide blurred edge broken up by cotton-like noise
+            Bb = gaussian_filter(B, w * 0.04)
+            mask = smoothstep(0.25, 0.6, Bb + (fluff - 0.5) * 0.35)
+            Bs = gaussian_filter(B, w * 0.12)
+            lit = np.clip(np.gradient(Bs, axis=0) * w * 0.35, 0, 1)              # tops face the light
+            inner = gaussian_filter(mask, w * 0.05)
+            silver = np.clip((1 - inner) * mask * 2.0, 0, 1) * lit                 # bright fringe on lit tops
+            gapd = np.exp(-((cx - W * gap_x) / (W * 0.35)) ** 2)                 # domes under the gap are brighter
+            v = (0.2 + 0.45 * lit + 0.3 * silver * (0.5 + 0.5 * gapd)) * light \
+                + (fluff - 0.5) * 0.18 + (lumpN - 0.5) * 0.12 + 0.1 * gapd - 0.15 * t
+            c = ramp(np.clip(v, 0, 1), PAL_STORM_GREY)
+            c = c * (1 - haze * (1 - t)) + hexc("5d6e73") * haze * (1 - t)
+            over(c, mask)
+    # dark solid storm base under the heaps
+    base = smoothstep(base_frac + 0.04, base_frac + 0.12, yy / H)
+    bc = ramp(np.clip(0.18 + (lumpN - 0.5) * 0.3, 0, 1), PAL_STORM_GREY)
+    over(bc * (1 - 0.5 * haze) + hexc("4d5c61") * 0.5 * haze, base)
+    if blur > 0:  # soft focus for distance (keep alpha edges soft too)
+        col = gaussian_filter(col, (blur, blur, 0))
+        alpha = gaussian_filter(alpha, blur)
+    col = np.clip(col + (fbm(H, W, seed + 3, beta=1.6, ax=4.0) - 0.5)[..., None] * 0.03, 0, 1)
+    save(name, col, alpha, size=(1024, int(1024 * H / W)))
+
+
+def storm_volume(name, seed, W, H, top_frac, scale, gain, gap=(0.55, -0.3), steps=16, march=0.012,
+                 dark=0.0, haze=0.0, out_h=None):
+    """Soft volumetric storm clouds: fractal density + light marched toward a bright gap.
+    Thin parts glow, thick parts self-shadow (like real backlit storm clouds)."""
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    v = yy / H
+    # billowy density: big puffs (inverted ridged noise) + detail
+    n1 = fbm(H, W, seed, beta=2.6 + 0.2 * scale, ax=1.4)
+    n2 = fbm(H, W, seed + 1, beta=2.0, ax=1.2)
+    n3 = fbm(H, W, seed + 2, beta=1.4, ax=1.0)
+    puffy = 1 - np.abs(n1 * 2 - 1)
+    dens = 0.55 * puffy + 0.3 * n2 + 0.15 * n3
+    # layer: denser downward, top edge heaped into big billows (large-scale noise) + smaller lumps
+    big = fbm(H, W, seed + 7, beta=3.2, ax=1.0)
+    edge = top_frac + (0.5 - big) * 0.55 + (n2 - 0.5) * 0.12
+    dens = dens + (v - edge) * 2.2
+    D = np.clip((dens - 0.55) * gain, 0, 1)
+    # light march toward the gap (direction varies per pixel)
+    gx, gy = W * gap[0], H * gap[1]
+    dx, dy = gx - xx, gy - yy
+    dx = (dx + W / 2) % W - W / 2  # wrapped distance (for the gap glow only)
+    # constant light direction (from above, leaning toward the gap) keeps the tile seamless
+    ux = np.full_like(xx, 0.18) * np.sign(gap[0] - 0.5 + 1e-6)
+    uy = np.full_like(yy, -0.98)
+    optical = np.zeros_like(D)
+    step_px = march * W
+    from scipy.ndimage import map_coordinates
+    for i in range(1, steps + 1):
+        sx = (xx + ux * step_px * i) % W
+        sy = np.clip(yy + uy * step_px * i, 0, H - 1)
+        optical += map_coordinates(D, [sy.ravel(), sx.ravel()], order=1, mode="nearest").reshape(H, W)
+    light = np.exp(-optical * 0.16)
+    gapd = np.exp(-((dx / W) ** 2 + ((yy - max(gy, 0)) / H * 0.8) ** 2) / 0.12)
+    # inner billows: light also varies with the local density structure
+    val = np.clip(0.06 + 0.8 * light + 0.15 * gapd - dark * v + (puffy - 0.5) * 0.22 + (n3 - 0.5) * 0.1, 0, 1)
+    col = ramp(val, PAL_STORM_GREY)
+    col = col * (1 - haze) + hexc("5f7075") * haze
+    alpha = smoothstep(0.0, 0.35, D)
+    save(name, col, alpha, size=(1024, out_h or int(1024 * H / W)))
+
+
+def storm2_layers():
+    # light comes from the bright gap above the middle; nearer layers are bigger, darker, sharper
+    storm_volume("storm2_far", 211, 2048, 1024, top_frac=0.3, scale=0.0, gain=2.2, gap=(0.55, -0.2), haze=0.25)
+    storm_volume("storm2_mid", 212, 2048, 1024, top_frac=0.38, scale=0.5, gain=2.6, gap=(0.55, -0.6), dark=0.25, haze=0.1)
+    storm_volume("storm2_near", 213, 2048, 768, top_frac=0.3, scale=1.0, gain=3.0, gap=(0.55, -1.2), dark=0.35)
+    # overhead ceiling: render a layer lit from "above" and flip it, so it hangs with lit undersides toward the gap
+    storm_volume("storm2_ceiling", 214, 2048, 768, top_frac=0.35, scale=0.6, gain=2.6, gap=(0.55, -0.8), dark=0.3)
+    im = Image.open(os.path.join(OUT, "storm2_ceiling.png"))
+    im.transpose(Image.FLIP_TOP_BOTTOM).save(os.path.join(OUT, "storm2_ceiling.png"))
+    return
+
+
+def _storm2_layers_old():
+    storm_heap("storm2_far", 211, 2048, 1024, base_frac=0.55, rows=2, dome_w=0.1, dome_h=0.22, blur=2.5, haze=0.45)
+    storm_heap("storm2_mid", 212, 2048, 1024, base_frac=0.6, rows=2, dome_w=0.15, dome_h=0.3, blur=1.2, haze=0.2)
+    storm_heap("storm2_near", 213, 2048, 768, base_frac=0.55, rows=2, dome_w=0.22, dome_h=0.42, blur=0.0, haze=0.0,
+               light=0.85)
+    # ceiling: billows hanging down from above (paint a sheet and flip it)
+    W, H = 2048, 768
+    col, a = rolling_sheet(214, W, H, top_frac=0.3, rows=3, sun_xy=(W * 0.55, H * 2.0), palette=PAL_STORM_GREY,
+                           haze_top=0.1, wisp=0.3, warp=3.0, billow_r=W * 0.05)
+    col = col * 0.7
+    save("storm2_ceiling", col[::-1], a[::-1], size=(1024, 384))
+
+
+def lightning_bolt():
+    """Branching bolt sprite (white with cyan glow) on transparent background."""
+    W, H = 512, 1024
+    rng = np.random.default_rng(301)
+    core = np.zeros((H, W), np.float32)
+
+    def branch(x, y, angle, length, width, depth):
+        steps = int(length / 8)
+        for _ in range(steps):
+            angle += rng.uniform(-0.5, 0.5)
+            angle = np.clip(angle, np.pi * 0.25, np.pi * 0.75)
+            nx, ny = x + np.cos(angle) * 8, y + np.sin(angle) * 8
+            for t in np.linspace(0, 1, 6):
+                px, py = int(x + (nx - x) * t), int(y + (ny - y) * t)
+                if 0 <= px < W and 0 <= py < H:
+                    core[max(0, py - width):py + width + 1, max(0, px - width):px + width + 1] = 1
+            x, y = nx, ny
+            if depth < 3 and rng.uniform() < 0.09:
+                branch(x, y, angle + rng.choice([-0.7, 0.7]), length * 0.35, max(0, width - 1), depth + 1)
+            if y > H - 10:
+                break
+    branch(W * 0.5, 0, np.pi / 2, H * 1.1, 1, 0)
+    glow = gaussian_filter(core, 2) * 1.5 + gaussian_filter(core, 8) * 2.5
+    a = np.clip(core + glow, 0, 1)
+    col = np.clip(np.dstack([np.ones_like(core)] * 3) * 1.0, 0, 1)
+    col[..., 0] -= (1 - core) * 0.25  # cyan-tinted glow, white core
+    save("bolt", col, a, size=(256, 512))
+
+
+def sky_whale2():
+    """Organic sky-whale silhouette from overlapping ellipses (head right, tail left)."""
+    W, H = 2048, 768
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    a = np.zeros((H, W), np.float32)
+
+    def ell(cx, cy, rx, ry, ang=0.0):
+        c, s = np.cos(ang), np.sin(ang)
+        u = ((xx - cx) * c + (yy - cy) * s) / rx
+        v = (-(xx - cx) * s + (yy - cy) * c) / ry
+        return np.clip(1.2 - np.sqrt(u * u + v * v) * 1.2, 0, 1) * 5
+
+    # head + body: big rounded mass, deeper belly
+    a = np.maximum(a, ell(W * 0.66, H * 0.47, W * 0.26, H * 0.2))
+    a = np.maximum(a, ell(W * 0.62, H * 0.53, W * 0.22, H * 0.19))
+    # tail stalk: chain of shrinking ellipses curving slightly up
+    for i in range(12):
+        t = i / 11
+        a = np.maximum(a, ell(W * (0.45 - 0.33 * t), H * (0.5 - 0.06 * t * t), W * (0.11 - 0.07 * t), H * (0.15 - 0.12 * t)))
+    # flukes (seen from the side: thin swept lobes)
+    a = np.maximum(a, ell(W * 0.08, H * 0.38, W * 0.06, H * 0.035, -0.5))
+    a = np.maximum(a, ell(W * 0.08, H * 0.5, W * 0.055, H * 0.03, 0.45))
+    # long pectoral fin sweeping back and down
+    a = np.maximum(a, ell(W * 0.55, H * 0.75, W * 0.14, H * 0.035, 0.32))
+    a = gaussian_filter(np.clip(a, 0, 1), 3.0)
+    col = np.dstack([np.full((H, W), c, np.float32) for c in (0.07, 0.09, 0.11)])
+    save("whale", col, a, size=(1024, 384))
+
+
+def sky_whale():
+    """Original sky-whale silhouette (side view): long body, tail flukes, long pectoral fin."""
+    W, H = 2048, 768
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    u = xx / W  # 0 = tail tip .. 1 = head
+    # spine: slight S-curve, tail end lifted
+    spine = H * (0.46 + 0.05 * np.sin(u * np.pi * 1.6) - 0.06 * smoothstep(0.35, 0.0, u))
+    # thickness: blunt big head, belly bulge, long taper into a thin tail stalk
+    prof = np.clip(np.where(u > 0.82, np.sqrt(np.clip((1.0 - u) / 0.18, 0, 1)), 1.0) *
+                   smoothstep(0.08, 0.62, u) ** 0.9, 0, 1)
+    top_h = H * 0.17 * prof
+    bot_h = H * 0.25 * prof  # deeper belly
+    dy = yy - spine
+    body = np.where(dy < 0, smoothstep(top_h + 2, top_h - 2, -dy), smoothstep(bot_h + 2, bot_h - 2, dy)) * (u > 0.06)
+    stalk = smoothstep(H * 0.022 + 2, H * 0.022 - 2, np.abs(dy)) * (u > 0.04) * (u < 0.2)
+    # crescent fluke at the tail tip (thin, swept back)
+    fx = W * 0.05
+    fl = np.zeros_like(body)
+    for sgn in (-1, 1):
+        t = np.clip((fx - xx) / (W * 0.05) + 0.2, 0, 1)
+        cy_f = H * 0.4 + sgn * t * H * 0.14
+        width = H * 0.035 * (1 - t) + 2
+        fl = np.maximum(fl, smoothstep(width + 2, width - 2, np.abs(yy - cy_f)) * (xx < fx + W * 0.02) * (xx > fx - W * 0.045))
+    # long humpback pectoral fin sweeping back and down from behind the head
+    ft = np.clip((W * 0.66 - xx) / (W * 0.26), 0, 1)
+    fin_y = H * 0.6 + ft * H * 0.28
+    fw = H * 0.045 * (1 - ft) ** 0.8 + 1
+    fin = smoothstep(fw + 2, fw - 2, np.abs(yy - fin_y)) * (xx < W * 0.66) * (xx > W * 0.4)
+    a = np.clip(np.maximum.reduce([body, stalk, fl, fin]), 0, 1)
+    a = gaussian_filter(a, 2.0)
+    col = np.dstack([np.full((H, W), c, np.float32) for c in (0.06, 0.08, 0.1)])
+    save("whale", col, a, size=(1024, 384))
+
+
+def mist():
+    """See-through drifting mist band (tileable), white-lilac streaks."""
+    W, H = 2048, 512
+    yy = np.mgrid[0:H, 0:W][0].astype(np.float32) / H
+    n = fbm(H, W, 81, beta=2.2, ax=7.0)
+    n2 = fbm(H, W, 82, beta=1.8, ax=3.0)
+    a = smoothstep(0.42, 0.75, n * 0.75 + n2 * 0.25) * np.exp(-((yy - 0.5) / 0.28) ** 2) * 0.85
+    col = ramp(n2, [(0, hexc("b8a6d8")), (0.6, hexc("e8d8ee")), (1, hexc("fff0e8"))])
+    save("mist", col, a, size=(1024, 256))
+
+
+def storm2_set():
+    sky_storm2()
+    storm2_layers()
+    lightning_bolt()
+    sky_whale()
+
+
 PAINTINGS = {
+    "storm2": storm2_set,
+    "storm": storm_set,
+    "mist": mist,
     "clouds": float_clouds,
     "bands": sea_bands,
     "stars": star_sprites,
