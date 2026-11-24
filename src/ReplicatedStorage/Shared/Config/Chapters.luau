@@ -1,7 +1,8 @@
 --!strict
 -- Chapters and zones (plan/02_CONTENT.md §2).
 -- Flight altitude is VIRTUAL: `from`/`to` are world studs inside the chapter's
--- flight column; `km` is what the HUD shows. Only Chapter 1 is fully specified now.
+-- flight column (200 studs per zone = 2000 units of the approved demo); `km` is
+-- what the HUD shows. Only Chapter 1 is fully specified now.
 export type Zone = {
 	id: string,
 	name: string,
@@ -23,17 +24,17 @@ local chapters: { Chapter } = {
 	{
 		id = 1, name = "Earth", tech = "Chemical",
 		zones = {
-			{ id = "LowSky", name = "Low Sky", from = 0, to = 2000, kmFrom = 0, kmTo = 10, baseValue = 10 },
-			{ id = "StormLayer", name = "Storm Layer", from = 2000, to = 4000, kmFrom = 10, kmTo = 25, baseValue = 25 },
-			{ id = "EdgeOfSpace", name = "Edge of Space", from = 4000, to = 6000, kmFrom = 25, kmTo = 100, baseValue = 60 },
+			{ id = "LowSky", name = "Low Sky", from = 0, to = 200, kmFrom = 0, kmTo = 10, baseValue = 10 },
+			{ id = "StormLayer", name = "Storm Layer", from = 200, to = 400, kmFrom = 10, kmTo = 25, baseValue = 25 },
+			{ id = "EdgeOfSpace", name = "Edge of Space", from = 400, to = 600, kmFrom = 25, kmTo = 100, baseValue = 60 },
 		},
 	},
 	{
 		id = 2, name = "Near Space", tech = "OrbitalBooster",
 		zones = {
-			{ id = "LowOrbit", name = "Low Orbit", from = 0, to = 2000, kmFrom = 100, kmTo = 2000, baseValue = 150 },
-			{ id = "MoonApproach", name = "Moon Approach", from = 2000, to = 4000, kmFrom = 2000, kmTo = 380000, baseValue = 400 },
-			{ id = "AsteroidBelt", name = "Asteroid Belt", from = 4000, to = 6000, kmFrom = 380000, kmTo = 500000, baseValue = 1000 },
+			{ id = "LowOrbit", name = "Low Orbit", from = 0, to = 200, kmFrom = 100, kmTo = 2000, baseValue = 150 },
+			{ id = "MoonApproach", name = "Moon Approach", from = 200, to = 400, kmFrom = 2000, kmTo = 380000, baseValue = 400 },
+			{ id = "AsteroidBelt", name = "Asteroid Belt", from = 400, to = 600, kmFrom = 380000, kmTo = 500000, baseValue = 1000 },
 		},
 	},
 }

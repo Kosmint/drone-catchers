@@ -110,7 +110,11 @@ local function tryLoad(key: string): (LoadResult, any)
 			local now = os.time()
 			if old ~= nil then
 				local lock = old.lock
-				if typeof(lock) == "table" and lock.job ~= SERVER_ID and now - (lock.time or 0) < LOCK_STALE_SECONDS then
+				-- Studio only (separate store): a lock left by an earlier Studio playtest is
+				-- never live, because stopping a playtest can cut the final save short.
+				local studioLeftover = IS_STUDIO and typeof(lock) == "table" and typeof(lock.job) == "string"
+					and string.sub(lock.job, 1, 7) == "studio-"
+				if typeof(lock) == "table" and lock.job ~= SERVER_ID and not studioLeftover and now - (lock.time or 0) < LOCK_STALE_SECONDS then
 					lockedElsewhere = true
 					return nil -- abort write
 				end

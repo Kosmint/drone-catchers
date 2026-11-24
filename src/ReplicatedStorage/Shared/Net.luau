@@ -21,8 +21,13 @@ local DEFINITIONS: { [string]: Def } = {
 	DataChanged = { kind = "event" },
 	Notify = { kind = "event" },
 	-- client -> server
+	RunEnded = { kind = "event" }, -- server force-ended a run (timeout) -> results
+	-- client -> server
 	RequestSnapshot = { kind = "event", rate = 0.5, burst = 2 },
 	DebugCommand = { kind = "function", rate = 5, burst = 10 },
+	RequestLaunch = { kind = "function", rate = 1, burst = 3 },
+	ReportCatch = { kind = "function", rate = 8, burst = 12 },
+	EndRun = { kind = "function", rate = 1, burst = 3 },
 }
 
 local FOLDER_NAME = "Remotes"

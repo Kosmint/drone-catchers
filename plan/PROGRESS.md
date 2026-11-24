@@ -1,7 +1,28 @@
 # PROGRESS
 
-**Current stage:** Stage 0 — Foundations (built & tested; waiting on git install + user gate approval)
-**Last session:** 2026-11-24 — Stage 0 built in Studio, all tests passed, scripts exported to `src/`, place saved (Roblox version 6).
+**Current stage:** Stage 1 — Flight Prototype (built & tested; waiting for the user to play it + gate approval)
+**Last session:** 2026-11-24 — Stage 1 built in Studio, playtested (launch → fly all 3 zones → beam catches incl. swarm multi-pull → recall + battery-empty tow → results), console clean, scripts in `src/` (byte-verified), place saved (Roblox version 15).
+
+## Stage 1 checklist
+- [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
+- [x] FlightSpace (`Workspace.FlightSpace`, origin X=20000) + Scriptable side camera (FOV 35, distance so 62 studs fill the height, lead 0.35/0.25, smoothing 3.5, shake w/ settings toggle).
+- [x] InputController on the **Input Action System** (`ReplicatedStorage.Inputs`: FlightContext Move/Beam/Aim/AimStick/Recall, BaseContext Launch). PC: WASD/arrows, mouse aim, LMB/Space beam, R recall. Gamepad: sticks, RT beam, B recall, Y launch. Touch: dynamic left thumbstick (Scriptable binding), BEAM button (auto-aim), RECALL button.
+- [x] Drone sim + model: `Assets.Drones.Tier1` = the AI red quadcopter (user's pick) ×1.4, one anchored Root assembly, 4 rotors spun via Motor6D (faster when moving), tilted toward camera, catch bounce, nozzle light.
+- [x] Virtual altitude → zone detection → "ENTERING <ZONE>" banner; per-zone lighting blend (`Config/ZoneLighting`: Low Sky = style baseline, Storm = slate, Edge = dark starry sky above the cloud deck), restored on return.
+- [x] ExpeditionService: RequestLaunch (cooldown 20 s, seed, stats, maxAltitude from engine level) → deterministic `Shared/SpawnGen` plan (same on client + server, verified) → ReportCatch validation (spawn exists/not caught/active in its zone queue, cargo, plausible pull time) → server modifier + size roll → EndRun (cargo → inventory + collection + stats, tow fee when battery-dead). Leaving mid-run keeps cargo. Timeout safety net.
+- [x] Creatures (`CreatureSimClient`): pooled per id, only rendered near the camera; Drifter, Skittish (darts away from a fast drone), Swarm (schools orbiting a moving centre, beam pulls up to 3 at once). Other behaviours fall back to Drifter until Stage 3.
+- [x] Beam: aim, 0.38 rad cone, range 23 studs, pull = strength/resistance, decay off-beam, Rare+ struggle (jerk + shake), swarm multi-pull, spiral intake, progress tag above the target.
+- [x] Battery (90 s idle, ×1.6 while beaming, low warning at 25%), cargo (5), Recall (dive + fade), Emergency Tow, results screen.
+- [x] Temporary Mission-Control HUD (battery, hull, cargo pips, altimeter with zone bands + engine limit, toasts, wallet, launch/refuel button, results).
+- [x] Debug commands (Studio/owner): `engine <1-30>`, `drone "<stat> <lvl>"`, `cooldown` (plus Stage 0 ones).
+- [ ] **User playtest + feel approval** (gate).
+
+## Stage 1 notes / decisions
+- Battery base changed 60 s → **90 s** (demo was ~95 s); beam range 30 → **23 studs** (demo 230 units). Creature density raised to **12 per 100 studs** (demo-equivalent 7 felt empty in 3D). Swarm drift slowed to demo speeds.
+- Engine level 1 reaches 260 studs (Low Sky + bottom of Storm Layer); level 30 reaches the top (600). Use `engine 30` to see Edge of Space now.
+- This place has **no PlayerModule** in PlayerScripts → the character is frozen during flight by anchoring HRP + zeroing WalkSpeed/Jump.
+- Studio only: a session lock left by a previous Studio playtest is ignored (stopping a playtest can cut the release save short → next playtest got kicked). Live servers keep the strict lock.
+- Testing tips: `user_mouse_input` uses GUI coordinates (viewport y − 58 top inset). Studio's MCP HTTP allowlist blocks localhost (a local file server to sync `src/` would need the user to allow `localhost` under Assistant Settings → MCP Permissions).
 
 ## Stage 0 checklist
 - [x] Hierarchy (Shared/Config, Shared/Util, Assets/*, Services, Controllers, Workspace Map/Plots/FlightSpace/RiftSpace)
@@ -23,9 +44,9 @@
 ## Stage status
 | Stage | Status | Gate approved |
 |---|---|---|
-| 0 Foundations | ✅ built & tested (git pending) | awaiting user |
-| 0.5 Style Test | ✅ built (scene `Workspace.StyleTest`), style guide in 03 §1a | awaiting user |
-| 1 Flight Prototype | ⏳ | — |
+| 0 Foundations | ✅ built & tested | ✅ |
+| 0.5 Style Test | ✅ built (scene `Workspace.StyleTest`), style guide in 03 §1a | ✅ 2026-11-24 |
+| 1 Flight Prototype | ✅ built & tested | awaiting user playtest |
 | 2 Flight Visuals Ch1 + Catch Presentation | ⏳ | — |
 | 3 Mood, Hazards, Return, Soundscape | ⏳ | — |
 | 4 Rocket & Launch | ⏳ | — |
@@ -75,7 +96,7 @@
 - 2026-11-24: Place published as **"Drone Catchers"** (placeId 75170479657945, universeId 10778873502). Studio API access ON — DataStore read verified. ShadowSoftness = 0.5. Devices: PC, phone, tablet.
 
 - 2026-11-24 (Stage 0.5 feedback): user OK'd the sky/clouds look for early stage; models "too simple/blank" for now (fine for early stage, detail/animation/effects later). User **likes the red AI quadcopter** (`StyleTest.Drone_AI`) more than the hand-built drone → use it as drone base (re-check it from the side flight camera in Stage 1). Its baked propellers were replaced: mesh segmented (body/arms/legs), 4 hand-built rotors (`Drone_AI.Rotors.Rotor1-4`: Hub + Cap + exactly 2 gray blades welded to Hub, verified spinning in playtest). No spin script yet (add in Stage 1/2: rotate each Rotor's Hub; blades follow via welds). User likes the AI Cloud Puff too (possible variant/other common creature).
-- OPEN: editor camera can't rotate with mouse for the user — likely left in a scripted state by screen_capture; reset `workspace.CurrentCamera.CameraType = Fixed→Custom` and check after captures.
+- FIXED (2026-11-24, Stage 1 session): editor camera was left `Scriptable` by screen_capture → reset to `Fixed`. If it happens again, run `workspace.CurrentCamera.CameraType = Enum.CameraType.Fixed` in the command bar.
 - Place saved to Roblox version 9. Roblox save gave transient HTTP 500 once; retry later works.
 
 ## Approved movement numbers (from browser demo — starting point for Roblox port)
@@ -91,7 +112,14 @@ Demo units ≈ studs at 1:1 to start, retune to Roblox scale if needed.
 - Mood vignette: amber in Tension, pulsing red in Danger; rise fast (k=4), fall slow (k=1.2).
 
 ## Placeholders to replace (track greybox here)
-_(none yet)_
+- All 12 creatures use one tinted Cloud Puff model (`Assets.Creatures.Placeholder`) → final models **Stage 6** (`Assets.Creatures.<Id>` is picked up automatically).
+- FlightSpace scenery (`FlightSpace.Chapter1`: flat meadow tiles, ball hills, CloudMesh layers) → real zone layers, Earth curve, horizon **Stage 2**.
+- Zone lighting is basic (`Config/ZoneLighting`) → full presets **Stage 2**.
+- Beam = flat light wedge + tether (low contrast over white clouds) → real beam VFX **Stage 2**.
+- Catch = spiral intake + toast → celebration tiers + Catch Card **Stage 2**.
+- HUD is temporary → final Mission Control HUD **Stage 2**.
+- Launch = fade to the sky (no rocket) → rocket + launch sequence **Stage 4**. Return = short dive + fade → re-entry **Stage 3**.
+- `Workspace.StyleTest` reference scene still sits above the spawn (visible from the base) → remove/move when the base is built (**Stage 5**).
 
 ## Known issues
 _(none yet)_

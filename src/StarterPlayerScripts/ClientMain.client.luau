@@ -8,6 +8,13 @@ local Controllers = script.Parent:WaitForChild("Controllers")
 
 local ORDER = {
 	"DataController",
+	"InputController",
+	"CameraController",
+	"FlightController",
+	"CreatureSimClient",
+	"BeamController",
+	"HUDController",
+	"ExpeditionController",
 }
 
 Net.init()

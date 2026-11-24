@@ -198,10 +198,10 @@ Luck cap total ×50 (initial; tune).
 ### Drone (Hangar) — levels 1–25 each (caps raise per chapter)
 | Stat | Lvl 1 | Per level | Notes |
 |---|---|---|---|
-| Battery | 60 s | +6 s | drain ×1.6 while beaming |
-| Speed | 40 studs/s | +2.5% | |
+| Battery | 90 s | +6 s | drain ×1.6 while beaming (Stage 1: demo ≈ 95 s) |
+| Speed | 43 studs/s | +2.5% | (demo 430 units/s at 0.1 studs/unit) |
 | Beam Strength | 1.0 | +8% | pull speed |
-| Beam Range | 30 studs | +2 studs | |
+| Beam Range | 23 studs | +1.2 studs | (demo 230 units) |
 | Cargo | 5 slots | +1 slot | |
 | Scanner | 60 studs | +6 studs | reveals Hidden |
 | Armor | 1 hit | +1 hit every 3 lvls | |

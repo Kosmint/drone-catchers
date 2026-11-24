@@ -17,13 +17,13 @@ end
 
 local drone: { [string]: Upgrade } = {
 	battery = { id = "battery", name = "Battery", maxLevel = 25, baseCost = 50, growth = 1.35,
-		value = function(l) return 60 + (l - 1) * 6 end, unit = "s" },
+		value = function(l) return 90 + (l - 1) * 6 end, unit = "s" }, -- seconds of idle flight (demo ≈ 95 s)
 	speed = { id = "speed", name = "Speed", maxLevel = 25, baseCost = 60, growth = 1.35,
 		value = function(l) return 1 + (l - 1) * 0.025 end, unit = "x" },
 	beamStrength = { id = "beamStrength", name = "Beam Strength", maxLevel = 25, baseCost = 80, growth = 1.35,
 		value = function(l) return 1 + (l - 1) * 0.08 end, unit = "x" },
 	beamRange = { id = "beamRange", name = "Beam Range", maxLevel = 25, baseCost = 70, growth = 1.35,
-		value = function(l) return 30 + (l - 1) * 2 end, unit = "studs" },
+		value = function(l) return 23 + (l - 1) * 1.2 end, unit = "studs" }, -- demo 230 units
 	cargo = { id = "cargo", name = "Cargo", maxLevel = 25, baseCost = 100, growth = 1.35,
 		value = function(l) return 5 + (l - 1) end, unit = "slots" },
 	scanner = { id = "scanner", name = "Scanner", maxLevel = 25, baseCost = 90, growth = 1.35,
