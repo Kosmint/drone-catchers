@@ -1,0 +1,7 @@
+# Studio place files (versions live on Roblox; large binaries)
+*.rbxl
+*.rbxlx
+*.rbxl.lock
+backups/
+# local Claude settings
+.claude/settings.local.json
