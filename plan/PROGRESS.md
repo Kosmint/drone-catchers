@@ -1,6 +1,33 @@
 # PROGRESS
 
-**Current stage:** Stage 1 — Flight Prototype (built & tested; waiting for the user to play it + gate approval)
+**Current stage:** Stage 2 — Flight Visuals Ch1 + Catch Presentation (started 2026-11-24)
+
+## Stage 1 gate feedback (user, 2026-11-24) — APPROVED, "continue with the second phase"
+Liked: drone movement (lean, propellers, floor bounce), battery system, zones changing as you climb, launch/lounge flow.
+Must change:
+1. **UI** looks "AI-ish and simple" → real Mission Control HUD design (Stage 2).
+2. **Clouds** look bad, especially in the distance → new cloud art; **each zone gets its own cloud types** (storm ≠ low sky).
+3. **No green ground** → below the flight band is atmosphere/cloud sea, not an Earth-like field.
+4. **Edge of Space: custom stars built into the scene** (not Roblox's skybox stars).
+5. **Creatures must move/face in 3D**: pitch up when rising, down when sinking, turn left/right with movement.
+6. Creature **models** too simple → Stage 6 (kept on list).
+7. **Recall = player-controlled descent**, not an instant cut to base → Stage 3 re-entry (already planned).
+8. Rocket launch into space → Stage 4 (already planned).
+
+## Stage 2 checklist
+- [x] Creatures move in 3D: yaw follows travel (turns through a 3/4 view toward the camera), pitch up/down with climb/sink, bank into turns, strain away from the drone while beamed.
+- [x] Clouds rebuilt per zone from the approved cloud mesh, tinted per zone via SpecialMesh.VertexColor (AI meshes + ellipsoid clouds tried and rejected: pillar/mushroom shapes, balloon look). Natural proportions, varied clusters:
+  - Low Sky: soft white/peach cumulus clusters (sparse, lower half) + **cloud sea** below (green ground removed).
+  - Storm Layer: slate storm towers with anvil tops, dark undercast shelves, broken storm puffs, **rain** (near streaks + distant curtains).
+  - Edge of Space: violet cloud deck below (storm-tower tops poke through), high cirrus streaks, **custom twinkling stars + faint galaxy band** (camera-locked = no parallax, only above the deck horizon). Roblox skybox stars off (`Sky.StarCount = 0`).
+- [x] Particle layers driven by the zone blend (`ZoneLighting.fxStars/fxRain`, emitters tagged `FxLayer`/`BaseRate`; camera-locked parts tagged `SkyLockY/Z/Roll`).
+- [ ] 3D low-poly Earth curve at Edge of Space
+- [ ] Final Mission Control HUD (user: current one "AI-ish and simple")
+- [ ] Beam VFX, catch animation (squash/stretch, intake flash), celebration tiers T0–T5 + Catch Card
+- [ ] Scanner ("?" edge blips, Hidden reveal)
+- [ ] Drone polish (thruster glow, lights, deploy anim)
+- [ ] Mobile HUD check (Device Simulator)
+- Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
 **Last session:** 2026-11-24 — Stage 1 built in Studio, playtested (launch → fly all 3 zones → beam catches incl. swarm multi-pull → recall + battery-empty tow → results), console clean, scripts in `src/` (byte-verified), place saved (Roblox version 15).
 
 ## Stage 1 checklist
@@ -46,8 +73,8 @@
 |---|---|---|
 | 0 Foundations | ✅ built & tested | ✅ |
 | 0.5 Style Test | ✅ built (scene `Workspace.StyleTest`), style guide in 03 §1a | ✅ 2026-11-24 |
-| 1 Flight Prototype | ✅ built & tested | awaiting user playtest |
-| 2 Flight Visuals Ch1 + Catch Presentation | ⏳ | — |
+| 1 Flight Prototype | ✅ built & tested | ✅ 2026-11-24 |
+| 2 Flight Visuals Ch1 + Catch Presentation | 🔨 in progress | — |
 | 3 Mood, Hazards, Return, Soundscape | ⏳ | — |
 | 4 Rocket & Launch | ⏳ | — |
 | 5 Base Core & Economy | ⏳ | — |

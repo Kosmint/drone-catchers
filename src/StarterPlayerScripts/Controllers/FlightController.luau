@@ -116,7 +116,44 @@ local function presetAt(chapterId: number, y: number): ZoneLighting.Preset
 	return get(zones[#zones])
 end
 
+-- particle layers in FlightSpace (stars, rain...) tagged with attribute FxLayer
+type FxEmitter = { emitter: ParticleEmitter, field: string, baseRate: number }
+local fxEmitters: { FxEmitter } = {}
+-- sky layers that follow the camera (stars have no parallax); attributes SkyLockY/Z/Roll
+type SkyLock = { part: BasePart, y: number, z: number, roll: number }
+local skyLocks: { SkyLock } = {}
+
+local function collectFx()
+	table.clear(fxEmitters)
+	table.clear(skyLocks)
+	local space = workspace:FindFirstChild("FlightSpace")
+	if not space then return end
+	for _, d in space:GetDescendants() do
+		if d:IsA("BasePart") and typeof(d:GetAttribute("SkyLockY")) == "number" then
+			table.insert(skyLocks, {
+				part = d,
+				y = d:GetAttribute("SkyLockY") :: number,
+				z = (d:GetAttribute("SkyLockZ") or -500) :: number,
+				roll = math.rad((d:GetAttribute("SkyLockRoll") or 0) :: number),
+			})
+		end
+		if d:IsA("ParticleEmitter") then
+			local layer = d:GetAttribute("FxLayer")
+			local base = d:GetAttribute("BaseRate")
+			if typeof(layer) == "string" and typeof(base) == "number" then
+				-- "stars" -> preset field "fxStars"
+				local field = "fx" .. string.upper(string.sub(layer, 1, 1)) .. string.sub(layer, 2)
+				table.insert(fxEmitters, { emitter = d, field = field, baseRate = base })
+			end
+		end
+	end
+end
+
 local function applyLighting(p: ZoneLighting.Preset)
+	for _, fx in fxEmitters do
+		local w = (p :: any)[fx.field]
+		fx.emitter.Rate = fx.baseRate * (if typeof(w) == "number" then w else 0)
+	end
 	Lighting.ClockTime = p.clockTime
 	Lighting.Brightness = p.brightness
 	Lighting.Ambient = p.ambient
@@ -227,6 +264,7 @@ function FlightController.begin(run: any)
 	snapshot(Lighting, LIGHT_PROPS)
 	snapshot(atmosphere, ATMOS_PROPS)
 	snapshot(colorCorrection, CC_PROPS)
+	collectFx()
 	applyLighting(presetAt(state.chapter, state.y))
 	lightingTimer = 0
 
@@ -239,6 +277,11 @@ function FlightController.finish()
 	if model then model:Destroy() end
 	model, root, nozzle = nil, nil, nil
 	table.clear(rotors)
+	for _, fx in fxEmitters do
+		fx.emitter.Rate = 0
+		fx.emitter:Clear()
+	end
+	table.clear(fxEmitters)
 	restoreLighting()
 end
 
@@ -330,6 +373,15 @@ function FlightController.update(dt: number, input: Vector2)
 	end
 
 	updateModel(dt)
+end
+
+-- call after the camera moved this frame
+function FlightController.updateSky()
+	if #skyLocks == 0 then return end
+	local cam = workspace.CurrentCamera.CFrame.Position
+	for _, s in skyLocks do
+		s.part.CFrame = CFrame.new(cam.X, cam.Y + s.y, ORIGIN.Z + s.z) * CFrame.Angles(0, 0, s.roll)
+	end
 end
 
 -- camera target: drone + velocity lead

@@ -85,6 +85,7 @@ local function stepFlight(rawDt: number)
 	BeamController.update(dt, phaseIs("flight") and InputController.beamHeld(), aim, fs, nozzle)
 
 	CameraController.updateFlight(dt, FlightController.cameraTarget())
+	FlightController.updateSky()
 	local camPos = workspace.CurrentCamera.CFrame.Position
 	local speed = math.sqrt(fs.vx * fs.vx + fs.vy * fs.vy)
 	CreatureSimClient.update(dt, fs.x, fs.y, speed, nozzle, camPos.X - ORIGIN.X, camPos.Y - ORIGIN.Y)

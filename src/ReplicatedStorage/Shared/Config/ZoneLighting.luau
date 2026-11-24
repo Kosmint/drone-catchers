@@ -17,6 +17,9 @@ export type Preset = {
 	ccContrast: number,
 	ccBrightness: number,
 	ccTint: Color3,
+	-- weights for particle layers in FlightSpace (ParticleEmitters with attribute FxLayer = "stars"/"rain")
+	fxStars: number,
+	fxRain: number,
 }
 
 local rgb = Color3.fromRGB
@@ -26,12 +29,14 @@ local presets: { [string]: Preset } = {
 		atmosDensity = 0.24, atmosOffset = 0.15, atmosColor = rgb(255, 220, 205), atmosDecay = rgb(170, 160, 220),
 		atmosGlare = 0.35, atmosHaze = 1,
 		ccSaturation = 0.12, ccContrast = 0.06, ccBrightness = 0.02, ccTint = rgb(255, 250, 245),
+		fxStars = 0, fxRain = 0,
 	},
 	StormLayer = {
 		clockTime = 15.2, brightness = 1.5, ambient = rgb(95, 100, 125), outdoorAmbient = rgb(120, 125, 150),
 		atmosDensity = 0.38, atmosOffset = 0.1, atmosColor = rgb(160, 168, 190), atmosDecay = rgb(92, 100, 132),
 		atmosGlare = 0, atmosHaze = 2.2,
 		ccSaturation = -0.18, ccContrast = 0.14, ccBrightness = -0.03, ccTint = rgb(220, 228, 245),
+		fxStars = 0, fxRain = 1,
 	},
 	EdgeOfSpace = {
 		-- low sun + dark atmosphere = deep violet sky with a thin glowing horizon
@@ -39,6 +44,7 @@ local presets: { [string]: Preset } = {
 		atmosDensity = 0.32, atmosOffset = 0.05, atmosColor = rgb(70, 70, 150), atmosDecay = rgb(30, 25, 80),
 		atmosGlare = 0.8, atmosHaze = 0,
 		ccSaturation = 0.1, ccContrast = 0.12, ccBrightness = 0.02, ccTint = rgb(230, 222, 255),
+		fxStars = 1, fxRain = 0,
 	},
 }
 

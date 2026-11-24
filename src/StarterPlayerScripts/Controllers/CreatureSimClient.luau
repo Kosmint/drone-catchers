@@ -34,6 +34,11 @@ export type Live = {
 	ph: number,
 	facing: number, -- 1 right, -1 left
 	yaw: number, -- smoothed render yaw
+	pitch: number, -- smoothed nose up/down
+	px: number, -- previous position (for the real velocity)
+	py: number,
+	svx: number, -- smoothed velocity
+	svy: number,
 	progress: number, -- beam pull 0..1
 	beamed: boolean, -- in the beam this frame
 	pending: boolean, -- catch request in flight
@@ -58,7 +63,10 @@ local folder: Folder? = nil
 local VIEW_X = 75 -- studs from camera centre where models exist
 local VIEW_Y = 48
 local CAM_PITCH = CFrame.Angles(math.rad(10), 0, 0)
-local YAW_RIGHT = math.rad(0) -- placeholder already faces +X turned toward camera
+-- heading: model faces +X; turning to -X goes through -pi/2 (facing the camera)
+local YAW_RIGHT = math.rad(-12) -- slight 3/4 turn toward the camera
+local YAW_LEFT = -math.pi + math.rad(12)
+local MAX_PITCH = math.rad(55)
 local HIDDEN = CFrame.new(0, -10000, 0)
 
 ----------------------------------------------------------------------------
@@ -146,7 +154,8 @@ local function activate(s: SpawnGen.Spawn)
 		dartX = 0, dartY = 0,
 		ph = s.phase,
 		facing = if math.sin(s.phase * 3.1) >= 0 then 1 else -1,
-		yaw = 0,
+		yaw = if math.sin(s.phase * 3.1) >= 0 then YAW_RIGHT else YAW_LEFT,
+		pitch = 0, px = s.x, py = s.y, svx = 0, svy = 0,
 		progress = 0, beamed = false, pending = false, caught = false,
 		intake = 0, intakeFrom = Vector2.zero,
 		scale = scaleFor(rarity),
@@ -162,6 +171,7 @@ local function activate(s: SpawnGen.Spawn)
 		l.x = g.cx + math.cos(s.slot * 1.9) * 4
 		l.y = g.cy + math.sin(s.slot * 1.9) * 2.5
 	end
+	l.px, l.py = l.x, l.y
 	table.insert(live, l)
 end
 
@@ -328,19 +338,41 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 		-- render only near the camera
 		local near = math.abs(l.x - camX) < VIEW_X and math.abs(l.y - camY) < VIEW_Y
 		if near and not l.model then acquire(l) elseif not near and l.model then release(l) end
+		-- 3D heading from the actual motion (behaviour + beam pull), smoothed
+		if dt > 0 then
+			local k = 1 - math.exp(-6 * dt)
+			l.svx += ((l.x - l.px) / dt - l.svx) * k
+			l.svy += ((l.y - l.py) / dt - l.svy) * k
+		end
+		l.px, l.py = l.x, l.y
+
 		local root = l.root
 		if root then
-			local targetYaw = if l.facing >= 0 then YAW_RIGHT else math.pi - YAW_RIGHT
-			-- face the drone while being pulled (it "looks back" as it struggles)
-			if l.beamed or l.pending then targetYaw = if droneX >= l.x then YAW_RIGHT else math.pi - YAW_RIGHT end
-			l.yaw += (targetYaw - l.yaw) * (1 - math.exp(-6 * dt))
+			-- facing: follow horizontal motion (hysteresis); while pulled it strains AWAY from the drone
+			if l.beamed or l.pending then
+				l.facing = if droneX >= l.x then -1 else 1
+			elseif l.svx > 0.6 then
+				l.facing = 1
+			elseif l.svx < -0.6 then
+				l.facing = -1
+			end
+			-- yaw passes through the camera side (-pi/2) when turning, so it turns toward us
+			local targetYaw = if l.facing >= 0 then YAW_RIGHT else YAW_LEFT
+			l.yaw += (targetYaw - l.yaw) * (1 - math.exp(-5 * dt))
+			-- pitch: nose up when rising, down when sinking (beam pull = straining away)
+			local vx, vy = math.abs(l.svx), l.svy
+			if l.beamed or l.pending then vy = -vy end
+			local targetPitch = math.clamp(math.atan2(vy, math.max(vx, 2)), -MAX_PITCH, MAX_PITCH)
+			l.pitch += (targetPitch - l.pitch) * (1 - math.exp(-5 * dt))
+			-- bank into turns (fast yaw change) + gentle idle roll
 			local bob = math.sin(l.ph * 2.2) * 0.25
-			local roll = math.sin(l.ph * 1.6) * 0.06
+			local roll = math.sin(l.ph * 1.6) * 0.06 + math.clamp((targetYaw - l.yaw) * 0.25, -0.35, 0.35)
 			local shrink = if l.caught then 1 - l.intake * l.intake * 0.9 else 1
 			local wobble = if l.beamed then math.sin(l.ph * 30) * 0.08 * l.progress else 0
 			local cf = CFrame.new(ORIGIN.X + l.x, ORIGIN.Y + l.y + bob, ORIGIN.Z)
 				* CAM_PITCH
-				* CFrame.Angles(0, l.yaw, roll + wobble)
+				* CFrame.Angles(0, l.yaw, 0)
+				* CFrame.Angles(roll, 0, l.pitch + wobble)
 			root.CFrame = cf
 			if shrink < 0.999 then
 				-- intake shrink (one creature for 0.35 s; scale is restored on release)
