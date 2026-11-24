@@ -457,11 +457,18 @@ def rolling_sheet(seed, W, H, top_frac, rows, sun_xy, palette, haze_top=0.65, wi
         rng = np.random.default_rng(seed + 9)
         blobs, x = [], 0.0
         while x < W:
-            r = billow_r * rng.uniform(0.55, 1.35)
-            blobs.append((x, H * top_frac + r * rng.uniform(0.25, 0.75), r, 1.0))
-            if rng.uniform() < 0.55:  # small bumps on top of big ones
-                blobs.append((x + rng.uniform(-0.4, 0.4) * r, H * top_frac + r * 0.1, r * rng.uniform(0.35, 0.6), 1.0))
-            x += r * rng.uniform(0.9, 1.5)
+            # clusters of 2-6 bumps with uneven heights, separated by low gaps
+            k = rng.integers(2, 7)
+            lift = rng.uniform(0.0, 1.0) ** 2  # most clusters low, a few tall
+            for j in range(k):
+                r = billow_r * rng.uniform(0.55, 1.3) * (0.8 + 0.6 * lift)
+                hump = np.sin((j + 0.5) / k * np.pi)  # tallest in the middle of a cluster
+                yb = H * top_frac + r * (0.9 - 0.7 * hump * lift) + billow_r * (1 - lift) * 0.6
+                blobs.append((x, yb, r, 1.0))
+                if rng.uniform() < 0.5:
+                    blobs.append((x + rng.uniform(-0.4, 0.4) * r, yb - r * 0.55, r * rng.uniform(0.35, 0.6), 1.0))
+                x += r * rng.uniform(0.7, 1.2)
+            x += billow_r * rng.uniform(0.5, 3.0)  # gap
         B = blob_field(H, W, blobs)
         B = B + (fbm(H, W, seed + 10, beta=1.6) - 0.5) * 0.35
         bmask = smoothstep(0.35, 0.55, B)
@@ -558,7 +565,108 @@ def star_sprites():
     save("star_dot", np.ones((N, N, 3), np.float32), dot, size=(128, 128))
 
 
+def sea_bands(n=10):
+    """The cloud sea as N thin parallax bands (far -> near). Each band: billowy top edge, opaque
+    down past the bottom of the screen, rolls sized for its distance. Writes art/out/bands.json
+    with the card layout (Roblox studs) so the build script places them exactly."""
+    import json
+    TAN = 0.6306           # 2*tan(FOV/2) for FOV 35
+    PLANE_DIST = 98        # camera -> flight plane
+    SCREEN_BOTTOM = 0.595  # screen bottom below the horizon (fraction of view height)
+    layout = []
+    for i in range(n):
+        t = i / (n - 1)
+        z = -880 + 460 * t                       # depth behind the flight plane
+        dist = PLANE_DIST - z
+        hv = dist * TAN                          # visible height (studs) at that depth
+        s = 0.01 + 0.43 * t ** 2.1               # top edge below the horizon (screen fraction)
+        top_frac = 0.1
+        card_h = (SCREEN_BOTTOM + 0.1 - s) * hv / (1 - top_frac)
+        card_w = min(2040, hv * 3.2)
+        tile_w = card_w / 2
+        center = -s * hv + top_frac * card_h - card_h / 2
+        layout.append({
+            "name": "Band%02d" % (i + 1), "z": round(z, 1), "w": round(card_w, 1), "h": round(card_h, 1),
+            "tileW": round(tile_w, 1), "offY": round(center, 2),
+            "kX": round(0.04 + 0.36 * t ** 1.3, 3), "kY": round(0.08 + 0.92 * t ** 1.3, 3),
+        })
+        # image: one tile, aspect tile_w : card_h
+        W = 2048
+        H = int(W * card_h / tile_w) // 2 * 2
+        H = max(H, 256)
+        sun = (W * 0.58, -H * (0.3 + 1.2 * t))
+        col, a = rolling_sheet(500 + i * 7, W, H, top_frac=top_frac, rows=int(3 + 3 * (1 - t)),
+                               sun_xy=sun, palette=PAL_DAY, haze_top=0.75 * (1 - t) ** 1.4 + 0.08,
+                               wisp=0.45 * (1 - t), warp=2.2 + t,
+                               billow_r=(W * (0.012 + 0.02 * t)) if t > 0.35 else 0.0)
+        # far bands melt into the bright horizon haze (only near bands keep full contrast)
+        haze = 0.7 * (1 - t) ** 1.6
+        col = col * (1 - haze) + hexc("fbe9dd") * haze
+        out_h = max(128, int(1024 * H / W))
+        save("band%02d" % (i + 1), col, a, size=(1024, out_h))
+    with open(os.path.join(OUT, "bands.json"), "w") as f:
+        json.dump(layout, f, indent=1)
+    print(json.dumps(layout))
+
+
+def float_clouds(n=5):
+    """Standalone floating cumulus clusters (same painterly billow shading as the sea bands),
+    soft wispy undersides; placed in the play space as world-fixed cards."""
+    for k in range(n):
+        rng = np.random.default_rng(900 + k)
+        W, H = 2048, 1152
+        blobs = []
+        # flat-ish base row
+        cx0 = W * 0.5
+        span = W * rng.uniform(0.55, 0.75)
+        nb = rng.integers(5, 8)
+        for j in range(nb):
+            x = cx0 - span / 2 + span * (j + 0.5) / nb + rng.uniform(-40, 40)
+            r = W * rng.uniform(0.07, 0.1)
+            blobs.append((x, H * 0.64, r, 1.0))
+        # dome of billows, tallest near the middle
+        for j in range(rng.integers(9, 15)):
+            u = rng.uniform(-1, 1)
+            x = cx0 + u * span * 0.45
+            hump = 1 - abs(u) ** 1.5
+            r = W * rng.uniform(0.06, 0.11) * (0.7 + 0.5 * hump)
+            y = H * 0.64 - hump * H * rng.uniform(0.18, 0.36)
+            blobs.append((x, y, r, 1.0))
+        B0 = blob_field(H, W, blobs, wrap=False)
+        m0 = B0 > 0.45
+        # cauliflower: small sub-billows sitting on the upper silhouette
+        edge = m0 & ~np.roll(m0, 6, axis=0)  # pixels whose neighbour above is outside
+        ey, ex = np.nonzero(edge)
+        sub = []
+        if len(ey):
+            for idx in rng.choice(len(ey), size=min(70, len(ey)), replace=False):
+                r = W * rng.uniform(0.018, 0.045)
+                sub.append((ex[idx], ey[idx] + r * 0.45, r, 0.9))
+        B = B0 + blob_field(H, W, sub, wrap=False)
+        B = B + (fbm(H, W, 950 + k, beta=1.6) - 0.5) * 0.2
+        mask = smoothstep(0.42, 0.52, B)
+        yy = np.mgrid[0:H, 0:W][0].astype(np.float32) / H
+        # wispy, fading underside
+        wisp = fbm(H, W, 960 + k, beta=2.0, ax=5.0)
+        mask = mask * np.clip(smoothstep(0.78, 0.62, yy) + (wisp - 0.5) * 0.6, 0, 1)
+        r0 = W * 0.05
+        # large-scale light from the smoothed mass; small billows only show in the rim
+        Bs = gaussian_filter(B, r0 * 0.5)
+        gy = np.gradient(Bs, axis=0)
+        top_lit = np.clip(gy * r0 * 3.0, 0, 1)
+        under = np.clip(-gy * r0 * 2.0, 0, 1)
+        rim = np.clip((1 - gaussian_filter(mask, r0 * 0.08)) * mask * 2.5, 0, 1) * (0.45 + 0.55 * top_lit)
+        lumpy = fbm(H, W, 970 + k, beta=2.4, ax=1.3)
+        val = np.clip(0.52 + 0.3 * top_lit - 0.1 * under + 0.32 * rim + (lumpy - 0.5) * 0.18
+                      - 0.22 * smoothstep(0.42, 0.75, yy), 0, 0.92)
+        val = painterly_steps(val, 7, lumpy, jitter=0.14, soft=0.65)
+        col = ramp(val, PAL_DAY)
+        save("cloud%02d" % (k + 1), col, mask, size=(1024, 576))
+
+
 PAINTINGS = {
+    "clouds": float_clouds,
+    "bands": sea_bands,
     "stars": star_sprites,
     "sky_low": sky_low,
     "sea_far": sea_far,

@@ -127,7 +127,7 @@ local fxEmitters: { FxEmitter } = {}
 type SkyLock = { part: BasePart, y: number, z: number, roll: number, kx: number, ky: number, anchorY: number }
 local skyLocks: { SkyLock } = {}
 -- painted images faded per zone: ImageLabels with attribute FxLayer (e.g. "skyLow" -> preset fxSkyLow)
-type FxImage = { label: ImageLabel, field: string }
+type FxImage = { label: ImageLabel, field: string, base: number }
 local fxImages: { FxImage } = {}
 
 local function fxField(layer: string): string
@@ -152,7 +152,13 @@ local function collectFx()
 				anchorY = ORIGIN.Y + ((d:GetAttribute("AnchorAlt") or 0) :: number),
 			})
 		elseif d:IsA("ImageLabel") and typeof(d:GetAttribute("FxLayer")) == "string" then
-			table.insert(fxImages, { label = d, field = fxField(d:GetAttribute("FxLayer") :: string) })
+			-- remember the authored transparency (see-through foreground clouds keep it when faded in)
+			local base = d:GetAttribute("BaseTransparency")
+			if typeof(base) ~= "number" then
+				base = d.ImageTransparency
+				d:SetAttribute("BaseTransparency", base)
+			end
+			table.insert(fxImages, { label = d, field = fxField(d:GetAttribute("FxLayer") :: string), base = base :: number })
 		end
 		if d:IsA("ParticleEmitter") then
 			local layer = d:GetAttribute("FxLayer")
@@ -171,7 +177,8 @@ local function applyLighting(p: ZoneLighting.Preset)
 	end
 	for _, fi in fxImages do
 		local w = (p :: any)[fi.field]
-		fi.label.ImageTransparency = 1 - math.clamp(if typeof(w) == "number" then w else 0, 0, 1)
+		local wc = math.clamp(if typeof(w) == "number" then w else 0, 0, 1)
+		fi.label.ImageTransparency = 1 - wc * (1 - fi.base)
 	end
 	Lighting.GeographicLatitude = p.latitude
 	Lighting.ClockTime = p.clockTime
