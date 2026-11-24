@@ -74,6 +74,10 @@
 - 2026-11-24: Empty folders already created in Studio (Shared/Config, Shared/Util, Assets/*, Services, Controllers, Workspace Map/Plots/FlightSpace/RiftSpace) before user stopped the premature start.
 - 2026-11-24: Place published as **"Drone Catchers"** (placeId 75170479657945, universeId 10778873502). Studio API access ON — DataStore read verified. ShadowSoftness = 0.5. Devices: PC, phone, tablet.
 
+- 2026-11-24 (Stage 0.5 feedback): user OK'd the sky/clouds look for early stage; models "too simple/blank" for now (fine for early stage, detail/animation/effects later). User **likes the red AI quadcopter** (`StyleTest.Drone_AI`) more than the hand-built drone → use it as drone base (re-check it from the side flight camera in Stage 1). Its baked propellers were replaced: mesh segmented (body/arms/legs), 4 hand-built rotors (`Drone_AI.Rotors.Rotor1-4`: Hub + Cap + exactly 2 gray blades welded to Hub, verified spinning in playtest). No spin script yet (add in Stage 1/2: rotate each Rotor's Hub; blades follow via welds). User likes the AI Cloud Puff too (possible variant/other common creature).
+- OPEN: editor camera can't rotate with mouse for the user — likely left in a scripted state by screen_capture; reset `workspace.CurrentCamera.CameraType = Fixed→Custom` and check after captures.
+- Place saved to Roblox version 9. Roblox save gave transient HTTP 500 once; retry later works.
+
 ## Approved movement numbers (from browser demo — starting point for Roblox port)
 Demo units ≈ studs at 1:1 to start, retune to Roblox scale if needed.
 - Drone accel 1250 u/s², exponential drag k=2.6/s (`v *= exp(-2.6*dt)`), max speed 430 u/s, slight idle bob (sin 1.3 Hz).
