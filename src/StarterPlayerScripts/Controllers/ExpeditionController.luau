@@ -22,7 +22,7 @@ local FlightController = require(Controllers.FlightController)
 local CreatureSimClient = require(Controllers.CreatureSimClient)
 local BeamController = require(Controllers.BeamController)
 local HUDController = require(Controllers.HUDController)
-local StormController = require(Controllers.StormController)
+local SkyController = require(Controllers.SkyController)
 
 local player = Players.LocalPlayer
 local ORIGIN = Balance.flight.origin
@@ -87,7 +87,7 @@ local function stepFlight(rawDt: number)
 
 	CameraController.updateFlight(dt, FlightController.cameraTarget())
 	FlightController.updateSky()
-	StormController.update(dt, FlightController.weight("fxSkyStorm"))
+	SkyController.update(dt)
 	local camPos = workspace.CurrentCamera.CFrame.Position
 	local speed = math.sqrt(fs.vx * fs.vx + fs.vy * fs.vy)
 	CreatureSimClient.update(dt, fs.x, fs.y, speed, nozzle, camPos.X - ORIGIN.X, camPos.Y - ORIGIN.Y)
@@ -157,7 +157,7 @@ local function launch()
 	HUDController.fade(1, 0.45)
 
 	FlightController.begin(res)
-	StormController.begin()
+	SkyController.begin()
 	CreatureSimClient.begin(plan)
 	BeamController.begin(res, FlightController.nozzleAttachment())
 	CameraController.enterFlight(FlightController.cameraTarget())
@@ -175,7 +175,7 @@ local function finishFlight()
 	if loopConn then loopConn:Disconnect() end
 	loopConn = nil
 	BeamController.finish()
-	StormController.finish()
+	SkyController.finish()
 	CreatureSimClient.finish()
 	FlightController.finish()
 	CameraController.exitFlight()

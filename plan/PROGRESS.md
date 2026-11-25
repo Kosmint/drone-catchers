@@ -14,7 +14,18 @@ Must change:
 7. **Recall = player-controlled descent**, not an instant cut to base → Stage 3 re-entry (already planned).
 8. Rocket launch into space → Stage 4 (already planned).
 
-## Stage 2 checklist
+## Stage 2 — RESET to the demo look (user, 2026-11-25) ← current direction
+User: scrap the painted sky, the 3D clouds and the whole Storm Layer; copy the approved Stage 0.5 browser demo style (flat low-poly 2D) into the game. Keep the drone + creature models. Zones = **Low Sky / Sunset Heights / Edge of Space** (no storm: "not realistic, clouds end in Low Sky"). Later chapters will be much longer (Low Sky ~300 km+).
+- [x] `SkyController` (client) rebuilds the demo sky every flight, 1:1 with the demo code: altitude sky gradient (demo keyframes), sun glow (fades by 35 km), 180 twinkling stars, ringed planet, moon (new), Earth curve with blue rim, far blue mountains (depth 0.3), **80 flat faceted 2D clouds** at depths 0.4/0.6/0.85/1/1.25 tinted per altitude like the demo (1.25 = half-transparent in front of the drone). World layers sit at real 3D depths so perspective = the demo's parallax; screen layers are camera-locked cards in demo screen units.
+- [x] Art: `art/demo_sky.py` → `art/out/demo` (8 clouds, planet, moon, earth, sun glow, 4 mountain tiles), asset ids in `Config/SkyArt`.
+- [x] Chapters: Storm Layer → **Sunset Heights**; km like the demo (0–35 / 35–70 / 70–105). Storm creatures replaced by demo ones: Dusk Moth, Ember Ray, Amber Kite (new Rare), Dusk Manta; Edge gets Star Krill (Common).
+- [x] ZoneLighting: no atmosphere, CC sat +0.28 / contrast +0.12 (undoes tone-mapper wash-out so the flat art shows demo colours). Deploy altitude 30 → **165 studs** (demo drops the drone at 1650 units).
+- [x] Deviation from the demo: depth-1 clouds sit 1 stud *behind* the drone plane (in the demo they could hide the drone).
+- [x] StormController deleted. Old scenery (painted sky, Clouds3D, Storm3D, SkyFX) parked in `ServerStorage.OldScenery` (`*_scrapped2`) — delete after the user approves the new look.
+- [ ] User approval of the demo-style sky (screenshots: deploy / Sunset Heights / Edge of Space).
+- [ ] Earth wedges are soft-edged (1 low-res image) → re-render in 2–3 tiles if the user wants it crisper. Ground hills/base from the demo not ported (user earlier: no green ground).
+
+## Stage 2 checklist (older items below the reset are superseded where they mention painted/3D clouds or the Storm Layer)
 - [x] Creatures move in 3D: yaw follows travel (turns through a 3/4 view toward the camera), pitch up/down with climb/sink, bank into turns, strain away from the drone while beamed.
 - [x] Clouds rebuilt per zone from the approved cloud mesh, tinted per zone via SpecialMesh.VertexColor (AI meshes + ellipsoid clouds tried and rejected: pillar/mushroom shapes, balloon look). Natural proportions, varied clusters:
   - Low Sky: soft white/peach cumulus clusters (sparse, lower half) + **cloud sea** below (green ground removed).
@@ -40,7 +51,7 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [ ] Drone polish (thruster glow, lights, deploy anim)
 - [ ] Mobile HUD check (Device Simulator)
 - Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
-**Last session:** 2026-11-24 — Stage 1 built in Studio, playtested (launch → fly all 3 zones → beam catches incl. swarm multi-pull → recall + battery-empty tow → results), console clean, scripts in `src/` (byte-verified), place saved (Roblox version 15).
+**Last session:** 2026-11-25 — demo-style sky reset built + playtested (deploy, Sunset Heights, Edge of Space), scripts in `src/` byte-verified, place saved (Roblox version 36).
 
 ## Stage 1 checklist
 - [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
@@ -165,3 +176,4 @@ _(none yet)_
 
 ## Session notes
 - 2026-11-24: Plan folder written. Next: user approval → Stage 0.
+- 2026-11-25: Flight visuals = the approved browser demo style (flat low-poly 2D sky + clouds). Storm Layer removed → Sunset Heights. Thunderstorm sky event will need a new home zone (Stage 8).

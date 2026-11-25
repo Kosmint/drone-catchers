@@ -21,7 +21,7 @@ return {
 		floor = 18, -- soft floor above the ground
 		floorSpring = 10,
 		ceilingSpring = 14, -- rocket limit spring
-		deployAltitude = 30,
+		deployAltitude = 165, -- demo: the rocket drops the drone at 1650 units (Low Sky, above the mountains)
 		deploySpeed = 18,
 		-- camera
 		fov = 35,

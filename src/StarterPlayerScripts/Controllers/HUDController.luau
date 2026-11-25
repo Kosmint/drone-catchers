@@ -31,7 +31,7 @@ local C = {
 }
 local ZONE_COLORS = {
 	LowSky = Color3.fromRGB(140, 192, 122),
-	StormLayer = Color3.fromRGB(143, 164, 200),
+	SunsetHeights = Color3.fromRGB(255, 179, 138),
 	EdgeOfSpace = Color3.fromRGB(143, 111, 214),
 }
 local FONT = Enum.Font.GothamBold

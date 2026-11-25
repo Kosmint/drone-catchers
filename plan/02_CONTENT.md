@@ -91,7 +91,7 @@ Display altitude ranges are virtual (see architecture §4).
 | Zone | Display alt. | Look | Hazards |
 |---|---|---|---|
 | 1.1 Low Sky | 0–10 km | Bright blue, cumulus clouds, birds far away, sun glare | wind gusts |
-| 1.2 Storm Layer | 10–25 km | Dark grey-blue, anvil clouds, rain streaks, lightning flashes | lightning strikes, turbulence |
+| 1.2 Sunset Heights | 35–70 km | Violet sky fading to orange near the horizon, flat low-poly clouds (demo style) | meteor showers (Stage 3) |
 | 1.3 Edge of Space | 25–100 km | Deep blue → near black, Earth curvature + thin blue atmosphere band, first stars, aurora | thin air (slower drone), cold (battery drain) |
 
 ### Chapter 2 — Near Space (Orbital Booster)

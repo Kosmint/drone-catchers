@@ -24,9 +24,10 @@ local chapters: { Chapter } = {
 	{
 		id = 1, name = "Earth", tech = "Chemical",
 		zones = {
-			{ id = "LowSky", name = "Low Sky", from = 0, to = 200, kmFrom = 0, kmTo = 10, baseValue = 10 },
-			{ id = "StormLayer", name = "Storm Layer", from = 200, to = 400, kmFrom = 10, kmTo = 25, baseValue = 25 },
-			{ id = "EdgeOfSpace", name = "Edge of Space", from = 400, to = 600, kmFrom = 25, kmTo = 100, baseValue = 60 },
+			-- same layers and km as the approved demo (km = demo units / 57); later chapters stretch far higher
+			{ id = "LowSky", name = "Low Sky", from = 0, to = 200, kmFrom = 0, kmTo = 35, baseValue = 10 },
+			{ id = "SunsetHeights", name = "Sunset Heights", from = 200, to = 400, kmFrom = 35, kmTo = 70, baseValue = 25 },
+			{ id = "EdgeOfSpace", name = "Edge of Space", from = 400, to = 600, kmFrom = 70, kmTo = 105, baseValue = 60 },
 		},
 	},
 	{
