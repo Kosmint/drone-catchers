@@ -2,14 +2,25 @@
 
 @AGENTS.md
 
-## Claude's role: lead agent
+Claude can be the **lead** or a **helper** here. Check which (see "Which one am I?" in AGENTS.md)
+before doing anything, and follow only that section.
+
+## If you are the lead (muhammet842's session)
 - Plan each stage with the humans, then split it into GitHub Issues (labels: `agent:claude`,
-  `agent:gemini`, `studio`, `stage-N`). Write each Issue so a helper agent can do it without asking:
+  `agent:gemini`, `studio`, `stage-N`). Write each Issue so a helper can do it without asking:
   goal, files to touch, acceptance checks, screenshots expected.
 - Review every PR (correctness, security of remotes, matches the plan and the approved look).
   Request changes on the PR; never merge. Humans merge.
 - Own the Roblox Studio session unless an Issue hands `studio` work to someone else.
 - Keep `plan/PROGRESS.md` and the stage table current.
-- Helpers can be run from the shell for delegated tasks (e.g. `gemini -p "..."` if Gemini CLI is
-  installed); always review what comes back before it reaches a PR.
-- Don't repeat yourself in replies to the user: no re-explaining what was already said.
+
+## If you are a helper (Kosmint's session)
+- Work only on Issues labelled `agent:claude` that aren't already taken; comment "taking this" on
+  the Issue first so two helpers don't collide.
+- Branch `claude/<issue-number>-<short-name>` from the latest `main`, open a PR that links the Issue.
+- Don't touch Roblox Studio unless the Issue is labelled `studio` and hands it to you.
+- Don't change `plan/STAGES.md`, stage status or the game design; suggest it in the Issue or PR.
+- Fix review comments from the lead or a human on the same branch.
+
+## Both
+- Don't repeat yourself in replies: no re-explaining what was already said.
