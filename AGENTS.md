@@ -11,13 +11,13 @@ Start every session by reading `plan/README.md` and `plan/PROGRESS.md`. The plan
 `00_GAME_DESIGN`, `01_ARCHITECTURE`, `02_CONTENT`, `03_ART_AND_AUDIO`, `STAGES`, `PROGRESS`.
 
 ## Team and roles
-- **Humans:** Kosmint (repo owner), muhammet842 and Çağan (`Cagan2112`). Kosmint and muhammet842
-  approve stage gates and merge pull requests. Only humans merge.
+- **Humans:** Kosmint (repo owner), muhammet842 and Çağan (`Cagan2112`). All three approve stage
+  gates and merge pull requests. Only humans merge.
 - **Lead agent ("boss"):** the Claude session run by **muhammet842**. Plans stages, splits work
   into GitHub Issues, assigns each Issue to one person, reviews every PR, keeps `plan/PROGRESS.md`
   current, owns the Roblox Studio session by default.
-- **Helper agents:** the Claude and Gemini sessions run by **Kosmint** and **Çağan** (and any other
-  agent). Take one Issue at a time, work on their own branch, open a PR, answer review comments.
+- **Helper agents:** **Kosmint**'s Claude and Gemini sessions and **Çağan**'s Gemini session (and
+  any other agent). Take one Issue at a time, work on their own branch, open a PR, answer review comments.
   They do not change the plan or stage status on their own.
 
 **Which one am I?** Run `gh api user --jq .login` (or ask your human). `muhammet842` → you are the
@@ -44,7 +44,8 @@ lead. Anyone else → you are a helper. If unsure, act as a helper.
    and wait for the lead.
 4. Quality over speed. No scuffed models, no placeholder visuals left behind without being tracked
    in `plan/PROGRESS.md` ("Placeholders to replace").
-5. Stage gates need human approval (screenshots + summary) before the next stage.
+5. Stage gates need approval from **at least 2 of the 3 humans** (screenshots + summary) before the
+   next stage.
 6. **Original content only.** Style inspiration is fine; copying assets, characters or a specific
    existing game is not.
 
@@ -54,6 +55,8 @@ lead. Anyone else → you are a helper. If unsure, act as a helper.
 - Small, focused PRs. Fill in the PR template, link the Issue (`Closes #12`), add screenshots for
   anything visual and say whether it was tested in Studio.
 - Claude reviews, a human merges. Fix review comments on the same branch.
+- An agent's PR is merged by a **different human** than the one who runs that agent (e.g. a PR from
+  Kosmint's Claude is merged by muhammet842 or Çağan).
 - Don't commit secrets, `.rbxl` place files or `.claude/settings.local.json`.
 - Update `plan/PROGRESS.md` in the same PR when you finish a checklist item.
 
