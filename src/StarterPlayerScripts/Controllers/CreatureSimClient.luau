@@ -12,6 +12,7 @@ local Balance = require(Shared.Config.Balance)
 local Creatures = require(Shared.Config.Creatures)
 local Rarities = require(Shared.Config.Rarities)
 local SpawnGen = require(Shared.SpawnGen)
+local CatchEvents = require(script.Parent.CatchEvents)
 
 local F = Balance.flight
 local S = Balance.spawns
@@ -45,6 +46,8 @@ export type Live = {
 	caught: boolean,
 	intake: number, -- 0..1 intake animation after a confirmed catch
 	intakeFrom: Vector2,
+	catchInfo: CatchEvents.CatchInfo?, -- set on a confirmed catch; Landed fires with it
+	revealed: boolean, -- false = a Hidden creature the scanner hasn't found (not drawn, not beamable)
 	scale: number,
 	model: Model?,
 	root: BasePart?,
@@ -158,6 +161,8 @@ local function activate(s: SpawnGen.Spawn)
 		pitch = 0, px = s.x, py = s.y, svx = 0, svy = 0,
 		progress = 0, beamed = false, pending = false, caught = false,
 		intake = 0, intakeFrom = Vector2.zero,
+		catchInfo = nil,
+		revealed = not (def.behavior == "Hidden" and Balance.scanner.hideHidden),
 		scale = scaleFor(rarity),
 		model = nil, root = nil, light = nil, done = false,
 	}
@@ -225,10 +230,23 @@ function CreatureSimClient.list(): { Live }
 	return live
 end
 
--- server confirmed the catch: play the intake and replace it in the sky
-function CreatureSimClient.confirmCatch(l: Live)
+-- Can the beam (and auto-aim) target it right now?
+function CreatureSimClient.isTargetable(l: Live): boolean
+	return l.revealed and not l.caught and not l.pending
+end
+
+-- Scanner found a Hidden creature: draw it and let the beam target it.
+function CreatureSimClient.reveal(l: Live)
+	l.revealed = true
+end
+
+-- server confirmed the catch: play the intake (fires CatchEvents.Landed when it ends)
+-- and replace it in the sky
+function CreatureSimClient.confirmCatch(l: Live, info: CatchEvents.CatchInfo)
 	l.caught = true
 	l.pending = false
+	l.revealed = true
+	l.catchInfo = info
 	l.intake = 0
 	l.intakeFrom = Vector2.new(l.x, l.y)
 	local g = groups[l.spawn.group]
@@ -323,6 +341,8 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 			l.y = ny + ox * math.sin(spin * t * 6) + oy * math.cos(spin * t * 6)
 			if l.intake >= 1 then
 				l.done = true
+				local info = l.catchInfo
+				if info then CatchEvents.Landed:Fire(info) end
 			end
 		elseif not l.pending then
 			stepBehaviour(l, dt, droneX, droneY, droneSpeed)
@@ -336,7 +356,7 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 		end
 
 		-- render only near the camera
-		local near = math.abs(l.x - camX) < VIEW_X and math.abs(l.y - camY) < VIEW_Y
+		local near = l.revealed and math.abs(l.x - camX) < VIEW_X and math.abs(l.y - camY) < VIEW_Y
 		if near and not l.model then acquire(l) elseif not near and l.model then release(l) end
 		-- 3D heading from the actual motion (behaviour + beam pull), smoothed
 		if dt > 0 then
