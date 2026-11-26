@@ -28,10 +28,13 @@ $Utf8 = New-Object System.Text.UTF8Encoding $false
 $Helpers = @('Kosmint', 'Cagan2112')
 $MaxContinueRuns = 3          # stop re-running an unfinished Issue after this many runs with no new comments
 $PromptName = '.agy-helper-prompt.md'   # written in the clone, hidden from git via .git/info/exclude
+$CmdFileName = '.agy-cmd.txt'           # the agent writes its git/gh command here, also hidden from git
 
 # Tool permissions for agy (merged into ~/.gemini/antigravity-cli/settings.json).
-# Allow: git and gh run without asking. Deny: never, even when you use Antigravity yourself.
-$AllowRules = @('command(git)', 'command(gh)')
+# agy headless matches command(...) allow-rules against the WHOLE command line, exactly: command(git),
+# command(git *) and friends never match, and only a lone command(*) is a wildcard. So agy gets ONE
+# exact grant, for the gate script scripts/agy-git.ps1, which runs only git/gh and refuses the rest.
+# The Deny rules below are an extra layer (they apply even when you use Antigravity yourself).
 $DenyRules = @(
     'command(git push --force)', 'command(git push -f)', 'command(git config --global)',
     'command(gh pr merge)', 'command(gh repo delete)', 'command(gh secret)',
@@ -41,6 +44,7 @@ $DenyRules = @(
 $LogDir = Join-Path $env:LOCALAPPDATA 'drone-catchers-gemini'
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $script:LogFile = Join-Path $LogDir 'helper.log'
+$script:GateCmd = ''   # the exact command line agy is allowed to run (set in Install-Gate)
 $script:ContinueRuns = @{}
 
 function Write-Log([string]$Message) {
@@ -139,6 +143,17 @@ function Add-Unique($List, [string[]]$Items) {
     return , $all
 }
 
+function Install-Gate {
+    # Copy the gate outside the clone (the agent can't edit it there) and build its exact command line.
+    $src = Join-Path $PSScriptRoot 'agy-git.ps1'
+    if (-not (Test-Path $src)) { throw "Missing $src" }
+    $dst = Join-Path $LogDir 'agy-git.ps1'
+    Copy-Item -LiteralPath $src -Destination $dst -Force
+    $pathText = $dst
+    if ($pathText -match '\s') { $pathText = '"' + $pathText + '"' }
+    $script:GateCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File ' + $pathText
+}
+
 function Set-AgySettings([string]$Workspace) {
     # Merge our permission rules and trust this clone in ~/.gemini/antigravity-cli/settings.json.
     $dir = Join-Path $env:USERPROFILE '.gemini\antigravity-cli'
@@ -150,8 +165,8 @@ function Set-AgySettings([string]$Workspace) {
         if ($raw.Trim()) {
             try { $obj = $raw | ConvertFrom-Json }
             catch {
-                throw ("Can't read $file (comments or invalid JSON?). Add these rules yourself with /permissions in agy: allow " +
-                       ($AllowRules -join ', ') + '; deny ' + ($DenyRules -join ', '))
+                throw ("Can't read $file (comments or invalid JSON?). Add these rules yourself with /permissions in agy: allow command(" +
+                       $script:GateCmd + '); deny ' + ($DenyRules -join ', '))
             }
         }
         $backup = "$file.before-drone-catchers"
@@ -165,7 +180,7 @@ function Set-AgySettings([string]$Workspace) {
     foreach ($kind in @('allow', 'deny')) {
         if (-not $perm.PSObject.Properties[$kind]) { $perm | Add-Member -NotePropertyName $kind -NotePropertyValue @() }
     }
-    $perm.allow = Add-Unique $perm.allow $AllowRules
+    $perm.allow = Add-Unique $perm.allow @("command($script:GateCmd)")
     $perm.deny = Add-Unique $perm.deny $DenyRules
     if (-not $obj.PSObject.Properties['trustedWorkspaces']) {
         $obj | Add-Member -NotePropertyName 'trustedWorkspaces' -NotePropertyValue @()
@@ -188,6 +203,28 @@ function Invoke-Agy([string]$PromptText, [string]$LogPath, [int]$Minutes) {
         return $null
     }
     return $proc.ExitCode
+}
+
+function Get-GateNote {
+    # Told to agy in every run: how to run git/gh in headless mode.
+    return @(
+        '## How to run git and gh in this environment (read this first)',
+        'Headless mode only allows ONE shell command line. You cannot run `git ...` or `gh ...` directly: that is auto-denied.',
+        'Instead, for EVERY git or gh command, do these two steps:',
+        "1. Write the file ``$CmdFileName`` (in the repository root, overwrite it each time) with your file-writing tool. Line 1 is ``git`` or ``gh``. Every following line is exactly ONE argument, taken literally (no quoting, no escaping, no shell syntax such as pipes, redirects or &&). Example for ``git commit -m ""add beam""``: the lines are ``git``, ``commit``, ``-m``, ``add beam``.",
+        '2. Run exactly this command line, character for character, and nothing else:',
+        '',
+        $script:GateCmd,
+        '',
+        'Its output is the output of your git/gh command, followed by `[exit N]`. `REFUSED: ...` means the gate blocks that command; do not try to get around it.',
+        "Put long text in a file and pass it by path: ``git commit -F <file>``, ``gh pr create --body-file <file>``, ``gh issue comment <n> --body-file <file>``, ``gh pr comment <n> --body-file <file>``.",
+        "``gh api`` is GET only. Use plain ASCII for titles and short messages. Do not commit ``$CmdFileName`` or ``$PromptName`` (they are hidden from git). Do not create other scripts.",
+        ''
+    ) -join "`n"
+}
+
+function Test-Blocked([string]$LogPath) {
+    return [bool](Select-String -Path $LogPath -Pattern 'headless mode cannot prompt|auto-denied' -Quiet -ErrorAction SilentlyContinue)
 }
 
 function Invoke-HelperRun($Work) {
@@ -229,11 +266,14 @@ function Invoke-HelperRun($Work) {
 
     $runLog = Join-Path $LogDir ('issue{0}-{1}.log' -f $Work.Issue, (Get-Date -Format 'yyyyMMdd-HHmmss'))
     Write-Log ("Issue #{0} ({1}): starting agy, trigger {2}. Log: {3}" -f $Work.Issue, $Work.Title, $Work.Trigger, $runLog)
-    $code = Invoke-Agy ($header + "`n" + $instructions + "`n") $runLog $TimeoutMinutes
+    $code = Invoke-Agy ($header + "`n" + (Get-GateNote) + "`n" + $instructions + "`n") $runLog $TimeoutMinutes
     if ($null -eq $code) {
         Write-Log ("Issue #{0}: agy timed out after {1} minutes and was stopped." -f $Work.Issue, $TimeoutMinutes)
     } elseif ($code -ne 0) {
         Write-Log ("Issue #{0}: agy failed (exit {1}). Last lines of the log:" -f $Work.Issue, $code)
+        Get-Content $runLog -Tail 8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Log "    $_" }
+    } elseif (Test-Blocked $runLog) {
+        Write-Log ("Issue #{0}: agy finished but was blocked by a permission rule (exit {1}). Last lines of the log:" -f $Work.Issue, $code)
         Get-Content $runLog -Tail 8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Log "    $_" }
     } else {
         Write-Log ("Issue #{0}: agy finished." -f $Work.Issue)
@@ -263,16 +303,42 @@ if ($Helpers -notcontains $script:Me) {
 
 # Keep the prompt file out of git, so it never counts as an uncommitted change.
 $exclude = Join-Path $script:Root '.git\info\exclude'
-if (-not (Select-String -Path $exclude -SimpleMatch $PromptName -Quiet -ErrorAction SilentlyContinue)) {
-    Add-Content -Path $exclude -Value $PromptName -Encoding UTF8
+foreach ($hidden in @($PromptName, $CmdFileName)) {
+    if (-not (Select-String -Path $exclude -SimpleMatch $hidden -Quiet -ErrorAction SilentlyContinue)) {
+        Add-Content -Path $exclude -Value $hidden -Encoding UTF8
+    }
 }
 
+# git needs an author to commit. If this PC has none, give agy one through environment variables
+# (this process only; your git config is not touched). The gate refuses git config / git -c.
+$gitName = (git config user.name | Out-String).Trim()
+$gitEmail = (git config user.email | Out-String).Trim()
+if (-not $gitName) { $env:GIT_AUTHOR_NAME = $script:Me; $env:GIT_COMMITTER_NAME = $script:Me }
+if (-not $gitEmail) {
+    $userId = (& gh api user --jq .id | Out-String).Trim()
+    $noreply = '{0}@users.noreply.github.com' -f $script:Me
+    if ($userId -match '^\d+$') { $noreply = '{0}+{1}' -f $userId, $noreply }
+    $env:GIT_AUTHOR_EMAIL = $noreply
+    $env:GIT_COMMITTER_EMAIL = $noreply
+}
+
+Install-Gate
 Set-AgySettings $script:Root
 
 # Check that agy is signed in before waiting for work.
 $checkLog = Join-Path $LogDir 'login-check.log'
 Write-Log 'Checking the Antigravity CLI sign-in...'
-$code = Invoke-Agy 'Reply with the single word OK. Do not use any tools.' $checkLog 3
+# The check also proves that agy can run the gate: it must print the git version through it.
+[System.IO.File]::WriteAllText((Join-Path $script:Root $CmdFileName), "git`n--version`n", $Utf8)
+$checkPrompt = (Get-GateNote) + "`nTest: run git --version through the gate now (the file $CmdFileName already contains it). Then reply with the gate output and the word OK."
+$code = Invoke-Agy $checkPrompt $checkLog 3
+$checkText = ''
+if (Test-Path $checkLog) { $checkText = [System.IO.File]::ReadAllText($checkLog) }
+if ($code -eq 0 -and $checkText -notmatch 'git version') {
+    Write-Log 'agy ran, but it could not run git through the gate script. Last lines of its output:'
+    Get-Content $checkLog -Tail 8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Log "    $_" }
+    throw 'The permission setup does not work (see AUTOMATION.md, If agy is blocked). Fix it, then start this script again.'
+}
 if ($code -ne 0) {
     Write-Log 'agy could not run. Last lines of its output:'
     Get-Content $checkLog -Tail 8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Log "    $_" }
