@@ -17,7 +17,7 @@ This folder is Claude's build bible for the game. Read this file first at the st
 ## Working rules (from the user — follow exactly)
 
 1. **This is a 1–2 week project, not a 1-day rush.** Quality over speed. Never compress stages to "finish faster".
-2. **Stage by stage.** Finish a stage completely → test it in Studio (playtest, screenshots, console clean) → show the user → only move on when the user approves.
+2. **Stage by stage.** Finish a stage completely → test it in Studio (playtest, screenshots, console clean) → show the humans → only move on when **at least 2 of the 3 humans** (Kosmint, muhammet842, Çağan) approve (see `AGENTS.md`).
 3. **No scuffed models, no boring gameplay.** Greybox (plain parts) is allowed *only* inside a stage as a temporary step to prove gameplay; it must be replaced by finished visuals before that stage's visual gate (or explicitly listed as "replaced in Stage X" in PROGRESS.md).
 4. **It must actually be playable** — every stage ends with something the user can press Play on and enjoy.
 5. **Solo game.** Multiplayer competitive mode is a *maybe-later* idea; keep code modular enough to add it, but don't build it.
