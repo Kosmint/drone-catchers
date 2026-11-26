@@ -6,8 +6,10 @@ For muhammet842's Claude, running locally with Roblox Studio open. Start it with
 Each cycle, in this order. Skip steps with nothing to do. Read `AGENTS.md` and `AUTOMATION.md` if
 you haven't this session. Check `gh api user --jq .login` is `muhammet842`; if not, stop.
 
-Every comment you post on a helper's Issue or PR **wakes that helper up** in GitHub Actions. Only
-comment when you want it to act. To comment without waking it, put `#nobot` in the comment.
+Every comment you post on a helper's Issue or PR **wakes that helper up**: Kosmint's Claude at once
+(GitHub Actions), a Gemini helper at its next hourly check on its human's PC. Only comment when you
+want it to act. To comment without waking it, put `#nobot` in the comment. Gemini comments are
+posted under Kosmint's or Çağan's name and start with `🤖 Gemini:`.
 
 ## 1. Questions
 `gh issue list --label soru --state open`
@@ -16,9 +18,12 @@ comment when you want it to act. To comment without waking it, put `#nobot` in t
   humans`, and list it in the report (step 6).
 
 ## 2. Failed helper runs
-`gh run list --workflow "Helper agents" --status failure --limit 10`
-Read the log. A transient failure or time-out: comment `continue` on the Issue to wake the helper.
-A real problem (bad Issue spec, missing secret): fix the Issue or report it.
+Cloud Claude: `gh run list --workflow "Helper agents" --status failure --limit 10`. Read the log.
+A transient failure or time-out: comment `continue` on the Issue to wake the helper. A real problem
+(bad Issue spec, missing secret): fix the Issue or report it.
+Local Gemini: you can't see its logs. A Gemini Issue with no `🤖 Gemini:` activity for 3 hours after
+assignment or your last comment means its human's PC or `gemini-helper.ps1` is off: list it in the
+report so that human can start it.
 
 ## 3. Review ready PRs
 `gh pr list --state open --draft=false` (skip PRs labelled `lider-onayi`)
@@ -43,7 +48,8 @@ Only inside a stage the humans have started, and only Issues from the plan they 
   Open the next one when its previous PR has `lider-onayi` or is merged.
 - Write the Issue so a helper can finish it alone: goal, files it owns, contract to use, acceptance
   checks, what to put in the PR. Only open it when its dependencies are merged.
-- Add the agent label first, then assign. **Assigning starts the helper.**
+- Add the agent label first, then assign. **Assigning starts the helper** (Claude at once, Gemini
+  within the hour). Give Gemini the work that doesn't block others, since it starts later.
 - Your own work (`studio`, assigned to muhammet842) you do yourself in this session.
 - Never start a new stage. When a stage's items are done, prepare the gate summary with screenshots
   for the humans (2 of the 3 must approve).

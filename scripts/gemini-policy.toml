@@ -1,0 +1,89 @@
+# Gemini CLI policy for the Drone Catchers Gemini helper (headless runs only).
+# scripts/gemini-helper.ps1 copies this to %USERPROFILE%\.gemini\policies\drone-catchers-helper.toml.
+# It only affects non-interactive runs (interactive = false); your normal Gemini chats are unchanged.
+# In headless mode anything not allowed here is refused. File edits are allowed by --approval-mode auto_edit.
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "git"
+decision = "allow"
+priority = 100
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh"
+decision = "allow"
+priority = 100
+interactive = false
+
+# Never, even though they start with git or gh.
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "git push --force"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "git push -f"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "git config --global"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh pr merge"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh repo"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh secret"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh variable"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh auth"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh workflow"
+decision = "deny"
+priority = 200
+interactive = false
+
+[[rule]]
+toolName = "run_shell_command"
+commandPrefix = "gh label"
+decision = "deny"
+priority = 200
+interactive = false

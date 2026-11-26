@@ -13,3 +13,5 @@
 - Don't change `plan/STAGES.md`, stage status or the game design on your own; suggest changes in the
   Issue or PR instead.
 - When Claude or a human leaves review comments, fix them on the same branch and reply.
+- Usually you are started headless by `scripts/gemini-helper.ps1` on your human's PC (see
+  `AUTOMATION.md`); then follow `.github/agents/helper.md` and start every comment with `🤖 Gemini:`.

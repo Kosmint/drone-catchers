@@ -1,75 +1,88 @@
 # Automation: how the agents work on their own
 
 The agents talk to each other only through GitHub Issues and PRs. Humans play, approve and merge.
+Every agent uses its human's **subscription**. No pay-per-use API keys.
 
 ```
 Lead (muhammet842's Claude, local, Studio open, /loop 1h)
   │  opens an Issue, labels it agent:claude / agent:gemini, assigns a person
   ▼
-GitHub Actions "Helper agents"  ──►  Kosmint's Claude  |  Kosmint's Gemini  |  Çağan's Gemini
+agent:claude → Kosmint      GitHub Actions starts Kosmint's Claude at once (cloud)
+agent:gemini → Kosmint      Kosmint's PC: scripts/gemini-helper.ps1 picks it up within the hour
+agent:gemini → Cagan2112    Çağan's PC:  scripts/gemini-helper.ps1 picks it up within the hour
   │  helper comments "taking this", pushes a branch, opens a draft PR, marks it ready
   ▼
 Lead (next cycle): reviews, tests in Studio
-  ├─ request changes ──► wakes the helper again (same PR)
+  ├─ request changes ──► the helper picks it up again (same PR)
   └─ OK: adds `lider-onayi`
   ▼
 A human plays it and merges (not the person whose agent wrote it)
 ```
 
-| Agent | Runs where | Started by |
-|---|---|---|
-| Lead (muhammet842, Claude) | muhammet842's PC, Studio open | `/loop 1h Read .github/agents/lead-loop.md and run one cycle.` |
-| Kosmint's Claude | GitHub Actions | Issue with `agent:claude` assigned to Kosmint |
-| Kosmint's Gemini | GitHub Actions | Issue with `agent:gemini` assigned to Kosmint |
-| Çağan's Gemini | GitHub Actions | Issue with `agent:gemini` assigned to Cagan2112 |
+| Agent | Runs where | Uses | Started by |
+|---|---|---|---|
+| Lead (muhammet842, Claude) | muhammet842's PC, Studio open | muhammet842's Claude subscription | `/loop 1h Read .github/agents/lead-loop.md and run one cycle.` |
+| Kosmint's Claude | GitHub Actions | Kosmint's Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`) | the assignment, immediately |
+| Kosmint's Gemini | Kosmint's PC | Kosmint's Gemini subscription | `scripts/gemini-helper.ps1`, checks every hour |
+| Çağan's Gemini | Çağan's PC | Çağan's Gemini subscription | `scripts/gemini-helper.ps1`, checks every hour |
 
-Files: `.github/workflows/helper-agents.yml` (the trigger), `.github/agents/helper.md` (what every
-cloud helper is told), `.github/agents/lead-loop.md` (one lead cycle).
+Files: `.github/workflows/helper-agents.yml` (cloud trigger, Claude only), `.github/agents/helper.md`
+(what every helper is told, cloud or local), `.github/agents/lead-loop.md` (one lead cycle),
+`scripts/gemini-helper.ps1` and `scripts/gemini-policy.toml` (local Gemini helper).
 
 ## What wakes a helper
-- **Assigning** the Issue to its human (the Issue needs exactly one assignee and one agent label).
-- A **comment** by a team member on that Issue or on its PR.
-- A **review** (changes requested or comment) on its PR. Approvals don't wake it.
+- **Assigning** the Issue to its human (exactly one assignee and one agent label).
+- A **comment** on that Issue or its PR, or a **review** on its PR (approvals don't count).
+  - Cloud Claude: by any team member, starts at once.
+  - Local Gemini: by anyone other than the Gemini's own human, picked up at the next check.
+    (A Gemini's comments are posted under its human's name, starting with `🤖 Gemini:`.)
 
 Never: `studio` Issues, Issues assigned to muhammet842, closed Issues, anything labelled
-`otomasyon-durdur`, comments containing `#nobot`, comments by anyone outside the team.
+`otomasyon-durdur`, comments containing `#nobot`, comments by people outside the team.
+A local Gemini that re-runs an unfinished Issue 3 times with no new comments stops until someone
+comments.
 
 ## Labels
 | Label | Meaning |
 |---|---|
 | `agent:claude` / `agent:gemini` | which agent does the Issue |
-| `studio` | needs Roblox Studio: stays with the lead, never runs in the cloud |
+| `studio` | needs Roblox Studio: stays with the lead, never runs in a helper |
 | `soru` | helper is stuck and waits for the lead |
 | `insan-karari` | needs a human decision (design, scope, price) |
 | `lider-onayi` | lead reviewed and tested it; a human should play it and merge |
-| `otomasyon-durdur` | pause cloud runs on this Issue or PR |
+| `otomasyon-durdur` | pause helper runs on this Issue or PR |
 
 ## Safety
-- Only `muhammet842`, `Kosmint` and `Cagan2112` can wake helpers. Bots can't (so helpers can't wake
-  themselves or each other).
-- One run per Issue at a time, 60 minutes max, limited turns.
-- Helpers can't push to `main` (protected) and can't change `.github/` (the workflow token has no
-  `workflows` permission). Their prompt is always read from `main`.
+- Only `muhammet842`, `Kosmint` and `Cagan2112` can wake helpers; bots can't (no loops).
+- Cloud: one run per Issue at a time, 60 minutes max, limited turns. The workflow token can't push
+  to `main` (protected) or change `.github/`. The prompt is always read from `main`.
+- Local Gemini: one Issue per round, 50 minutes max. Headless Gemini may only run `git` and `gh`
+  (`scripts/gemini-policy.toml`; no merge, no force push, no secrets, no `gh auth`/`repo`/`label`).
+  The prompt and the policy are always read from `main`.
 - Humans merge everything.
-- **Kill switch:** set the repo variable `AUTOMATION_ENABLED` to anything other than `true`.
-  For one Issue/PR: label `otomasyon-durdur`. For one comment: write `#nobot`.
+- **Stop everything:** repo variable `AUTOMATION_ENABLED` ≠ `true` stops the cloud Claude; close the
+  `gemini-helper.ps1` window to stop a local Gemini. For one Issue/PR: label `otomasyon-durdur`.
+  For one comment: write `#nobot`.
 
-## One-time setup (Kosmint, as repo admin)
-1. **Settings → Actions → General → Workflow permissions:** "Read and write permissions" and tick
-   "Allow GitHub Actions to create and approve pull requests".
-2. **Settings → Secrets and variables → Actions → Secrets:**
-   - `CLAUDE_CODE_OAUTH_TOKEN`: Kosmint runs `claude setup-token` on his PC and pastes the token.
-     Uses Kosmint's Claude subscription.
-   - `GEMINI_API_KEY_KOSMINT`: Kosmint's key from Google AI Studio.
-   - `GEMINI_API_KEY_CAGAN`: Çağan's key from Google AI Studio. Çağan sends it to Kosmint privately
-     (never in an Issue, PR or chat log). An API key is billed separately from a Gemini subscription;
-     check the free-tier limits.
-3. **Settings → Secrets and variables → Actions → Variables:**
-   - `AUTOMATION_ENABLED` = `true` (turns the automation on)
-   - optional: `HELPER_CLAUDE_MODEL` (default `claude-sonnet-5-5`), `HELPER_GEMINI_MODEL`
-     (default: Gemini CLI's default), `HELPER_MAX_TURNS` (default `80`)
-4. Test: the lead opens a small Issue (for example a typo fix), labels it, assigns it to Kosmint and
-   watches the **Actions** tab.
+## Setup: cloud Claude (Kosmint, repo admin) — done
+1. Settings → Actions → General: "Read and write permissions" + "Allow GitHub Actions to create and
+   approve pull requests".
+2. Secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, Kosmint's subscription).
+3. Variable `AUTOMATION_ENABLED` = `true`. Optional: `HELPER_CLAUDE_MODEL`, `HELPER_MAX_TURNS`.
+
+The Gemini API-key secrets are no longer used: delete `GEMINI_API_KEY_KOSMINT` and
+`GEMINI_API_KEY_CAGAN`, and delete the keys in Google AI Studio.
+
+## Setup: local Gemini helper (Kosmint and Çağan, each on their own PC)
+1. Install Git, GitHub CLI and Node.js. Install Gemini CLI: `npm install -g @google/gemini-cli`.
+2. Log in: `gh auth login` (your own GitHub account). Then run `gemini` once and sign in with the
+   Google account that has the Gemini subscription; exit it.
+3. Clone the repo into a folder used **only** by this helper:
+   `git clone https://github.com/Kosmint/drone-catchers.git drone-catchers-gemini`
+4. In that folder: `powershell -ExecutionPolicy Bypass -File .\scripts\gemini-helper.ps1`
+   Keep the window open (and the PC awake). `-Once` does a single check; `-IntervalMinutes 30`
+   checks more often. Logs: `%LOCALAPPDATA%\drone-catchers-gemini\`.
+5. Don't edit files in that folder yourself; the helper skips a round if it finds uncommitted changes.
 
 ## Lead setup (muhammet842)
 - PC on, Roblox Studio open on the place, Claude Code in the repo folder with the Studio MCP.
