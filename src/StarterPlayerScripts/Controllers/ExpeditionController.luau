@@ -12,7 +12,6 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Shared = ReplicatedStorage.Shared
 local Net = require(Shared.Net)
 local Balance = require(Shared.Config.Balance)
-local Modifiers = require(Shared.Config.Modifiers)
 local SpawnGen = require(Shared.SpawnGen)
 
 local Controllers = script.Parent
@@ -23,6 +22,8 @@ local CreatureSimClient = require(Controllers.CreatureSimClient)
 local BeamController = require(Controllers.BeamController)
 local HUDController = require(Controllers.HUDController)
 local SkyController = require(Controllers.SkyController)
+local CatchEvents = require(Controllers.CatchEvents)
+local TimeScale = require(Controllers.TimeScale)
 
 local player = Players.LocalPlayer
 local ORIGIN = Balance.flight.origin
@@ -77,7 +78,8 @@ end
 -- per-frame flight loop
 ----------------------------------------------------------------------------
 local function stepFlight(rawDt: number)
-	local dt = math.min(rawDt, 1 / 20)
+	TimeScale.update(rawDt)
+	local dt = math.min(rawDt, 1 / 20) * TimeScale.get() -- catch slow motion
 	local fs = FlightController.state
 	FlightController.update(dt, InputController.move())
 
@@ -174,6 +176,7 @@ end
 local function finishFlight()
 	if loopConn then loopConn:Disconnect() end
 	loopConn = nil
+	TimeScale.reset()
 	BeamController.finish()
 	SkyController.finish()
 	CreatureSimClient.finish()
@@ -218,26 +221,13 @@ end
 ----------------------------------------------------------------------------
 -- feedback
 ----------------------------------------------------------------------------
-local function onCaught(l: CreatureSimClient.Live, res: any)
-	table.insert(cargoColors, l.rarity.color)
+-- A caught creature reached the drone: fill the cargo slot and bounce the drone.
+-- The toast, shake and celebration are CelebrationController's (CatchEvents.Landed).
+local function onLanded(info: CatchEvents.CatchInfo)
+	if info.isTest or not run or not (phaseIs("flight") or phaseIs("returning")) then return end
+	table.insert(cargoColors, info.rarity.color)
 	HUDController.setCargo(cargoColors, run.stats.cargo)
 	FlightController.bounce()
-
-	local tags = {}
-	local modColor: Color3? = nil
-	for _, id in res.modifiers or {} do
-		local m = Modifiers.byId[id]
-		if m then
-			table.insert(tags, m.name)
-			modColor = m.color
-		end
-	end
-	if res.size and res.size ~= "Normal" then table.insert(tags, res.size) end
-	local text = string.format("+ %s  ·  %s", l.def.name, l.rarity.name)
-	if #tags > 0 then text ..= "  [" .. table.concat(tags, ", ") .. "]" end
-	local big = l.rarity.rank >= 4 or modColor ~= nil
-	HUDController.toast(text, modColor or l.rarity.color, big)
-	CameraController.shake(if big then 0.35 else 0.06)
 
 	if cargoColors[run.stats.cargo] then
 		HUDController.toast(if InputController.device() == "touch" then "Cargo full: tap RECALL" else "Cargo full: press R to recall", PEACH)
@@ -267,7 +257,7 @@ function ExpeditionController.init()
 	FlightController.CeilingHit:Connect(function()
 		HUDController.toast("Rocket limit reached: upgrade the Engine to fly higher", PEACH)
 	end)
-	BeamController.Caught:Connect(onCaught)
+	CatchEvents.Landed:Connect(onLanded)
 	BeamController.CargoFull:Connect(function()
 		HUDController.toast(if InputController.device() == "touch" then "Cargo full: tap RECALL" else "Cargo full: press R to recall", PEACH)
 	end)

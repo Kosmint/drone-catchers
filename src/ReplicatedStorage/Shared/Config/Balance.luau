@@ -39,6 +39,11 @@ return {
 		batteryDrainMult = 1.6,
 		swarmMultiPull = 3, -- max creatures of one swarm pulled at once
 	},
+	scanner = {
+		-- true = Hidden creatures stay invisible and unbeamable until the scanner reveals them
+		-- (CreatureSimClient.reveal). Off until the scanner ships, so they stay catchable.
+		hideHidden = false,
+	},
 	battery = {
 		lowThreshold = 0.25,
 		criticalThreshold = 0.10,

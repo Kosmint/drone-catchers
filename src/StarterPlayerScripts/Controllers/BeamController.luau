@@ -12,13 +12,14 @@ local Net = require(Shared.Net)
 local Balance = require(Shared.Config.Balance)
 local Signal = require(Shared.Util.Signal)
 local CreatureSimClient = require(script.Parent.CreatureSimClient)
+local CatchEvents = require(script.Parent.CatchEvents)
 
 local B = Balance.beam
 local ORIGIN = Balance.flight.origin
 local BEAM_CYAN = Color3.fromRGB(79, 216, 255)
 
 local BeamController = {}
-BeamController.Caught = Signal.new() -- (live, result)
+-- A confirmed catch fires CatchEvents.Caught(info, live) (see CatchEvents).
 BeamController.CargoFull = Signal.new()
 BeamController.Struggle = Signal.new() -- (live)
 
@@ -153,8 +154,10 @@ local function requestCatch(l: CreatureSimClient.Live)
 		pendingCount -= 1
 		if ok and typeof(res) == "table" and res.ok then
 			cargoCount += 1
-			CreatureSimClient.confirmCatch(l)
-			BeamController.Caught:Fire(l, res)
+			local info = CatchEvents.info(l.def, l.rarity, res, cargoCount, run.stats.cargo,
+				Vector3.new(ORIGIN.X + l.x, ORIGIN.Y + l.y, ORIGIN.Z))
+			CreatureSimClient.confirmCatch(l, info)
+			CatchEvents.Caught:Fire(info, l)
 		else
 			CreatureSimClient.rejectCatch(l)
 			if ok and typeof(res) == "table" and res.reason == "full" then
@@ -218,7 +221,7 @@ function BeamController.update(dt: number, held: boolean, aimPoint: Vector3?, fl
 		-- auto-aim: nearest creature in reach (touch, or gamepad without right stick)
 		local bestD = range * 1.15
 		for _, l in creatures do
-			if not l.caught and not l.pending then
+			if CreatureSimClient.isTargetable(l) then
 				local dx, dy = l.x - nx, l.y - ny
 				local d = math.sqrt(dx * dx + dy * dy)
 				if d < bestD and d > 0.01 then
@@ -240,7 +243,7 @@ function BeamController.update(dt: number, held: boolean, aimPoint: Vector3?, fl
 	local bestD = math.huge
 	if active then
 		for _, l in creatures do
-			if not l.caught and not l.pending then
+			if CreatureSimClient.isTargetable(l) then
 				local dx, dy = l.x - nx, l.y - ny
 				local d = math.sqrt(dx * dx + dy * dy)
 				if d < range and d > 0.01 and (dx * aimDir.X + dy * aimDir.Y) / d > cosHalf and d < bestD then
@@ -254,7 +257,10 @@ function BeamController.update(dt: number, held: boolean, aimPoint: Vector3?, fl
 	local swarmGroup = if best and best.def.behavior == "Swarm" then best.spawn.group else -1
 	local swarmPulled = 0
 	for _, l in creatures do
-		if l.caught or l.pending then continue end
+		if not CreatureSimClient.isTargetable(l) then
+			l.beamed = false
+			continue
+		end
 		local inBeam = l == best
 		if not inBeam and swarmGroup ~= -1 and l.spawn.group == swarmGroup and swarmPulled < B.swarmMultiPull - 1 then
 			local dx, dy = l.x - nx, l.y - ny
