@@ -1,0 +1,37 @@
+{
+  "name": "DroneCatchers",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "Shared": {
+        "$path": "src/ReplicatedStorage/Shared"
+      }
+    },
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "$ignoreUnknownInstances": true,
+      "ServerMain": {
+        "$path": "src/ServerScriptService/ServerMain.server.luau"
+      },
+      "Services": {
+        "$path": "src/ServerScriptService/Services"
+      }
+    },
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "$ignoreUnknownInstances": true,
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "$ignoreUnknownInstances": true,
+        "ClientMain": {
+          "$path": "src/StarterPlayerScripts/ClientMain.client.luau"
+        },
+        "Controllers": {
+          "$path": "src/StarterPlayerScripts/Controllers"
+        }
+      }
+    }
+  }
+}
