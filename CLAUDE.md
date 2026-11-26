@@ -17,7 +17,7 @@ before doing anything, and follow only that section.
 - Own the Roblox Studio session unless an Issue hands `studio` work to someone else.
 - Keep `plan/PROGRESS.md` and the stage table current.
 
-## If you are a helper (Kosmint's or Çağan's session)
+## If you are a helper (Kosmint's session)
 - Work only on Issues assigned to your human with the `agent:claude` label:
   `gh issue list --assignee @me --label agent:claude`. One at a time; comment "taking this" first.
 - Stuck: comment on the Issue (what, why, what you tried), then wait for the lead.
