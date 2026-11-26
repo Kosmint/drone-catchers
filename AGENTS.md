@@ -11,24 +11,37 @@ Start every session by reading `plan/README.md` and `plan/PROGRESS.md`. The plan
 `00_GAME_DESIGN`, `01_ARCHITECTURE`, `02_CONTENT`, `03_ART_AND_AUDIO`, `STAGES`, `PROGRESS`.
 
 ## Team and roles
-- **Humans:** Kosmint (repo owner) and muhammet842. They approve stage gates and merge pull
-  requests. Only humans merge.
+- **Humans:** Kosmint (repo owner), muhammet842 and Çağan (`Cagan2112`). Kosmint and muhammet842
+  approve stage gates and merge pull requests. Only humans merge.
 - **Lead agent ("boss"):** the Claude session run by **muhammet842**. Plans stages, splits work
-  into GitHub Issues, reviews every PR, keeps `plan/PROGRESS.md` current, owns the Roblox Studio
-  session by default.
-- **Helper agents:** the Claude and Gemini sessions run by **Kosmint** (and any other agent).
-  Take one Issue at a time, work on their own branch, open a PR, answer review comments. They do not
-  change the plan or stage status on their own.
+  into GitHub Issues, assigns each Issue to one person, reviews every PR, keeps `plan/PROGRESS.md`
+  current, owns the Roblox Studio session by default.
+- **Helper agents:** the Claude and Gemini sessions run by **Kosmint** and **Çağan** (and any other
+  agent). Take one Issue at a time, work on their own branch, open a PR, answer review comments.
+  They do not change the plan or stage status on their own.
 
 **Which one am I?** Run `gh api user --jq .login` (or ask your human). `muhammet842` → you are the
 lead. Anyone else → you are a helper. If unsure, act as a helper.
+
+## Issues: who takes what
+- The lead assigns **every Issue to exactly one person** (GitHub assignee) and gives it one agent
+  label: `agent:claude` or `agent:gemini`.
+- A helper takes **only** Issues assigned to its own human **and** carrying its own agent label.
+  Find them with (Gemini uses `--label agent:gemini`):
+  `gh issue list --assignee @me --label agent:claude`
+  `@me` is the GitHub account your `gh` is logged in as, i.e. your human. Never take an unassigned
+  Issue or one assigned to someone else, and never change the assignee yourself.
+- One Issue at a time. Comment "taking this" on the Issue before you start.
+- **Stuck?** Comment on the Issue: what is blocked, why, and what you already tried. Then stop and
+  wait for the lead's answer; don't work around it or start another Issue.
 
 ## Working rules
 1. **Never start a stage until a human says "start".** Questions and feedback are not a go-ahead.
 2. Work **step by step**. After each step, check it actually works (playtest / console / screenshot)
    and ask: *would a player find this appealing?* If not, improve it before moving on.
 3. **Don't loop.** If the same approach fails twice, stop: find the root cause, try a different
-   approach, or read the Roblox docs. If still blocked, say what is blocked and why in the Issue/PR.
+   approach, or read the Roblox docs. If still blocked, say what is blocked and why in the Issue/PR
+   and wait for the lead.
 4. Quality over speed. No scuffed models, no placeholder visuals left behind without being tracked
    in `plan/PROGRESS.md` ("Placeholders to replace").
 5. Stage gates need human approval (screenshots + summary) before the next stage.
