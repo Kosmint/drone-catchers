@@ -1,4 +1,4 @@
-# Project Plan — Sky Drone Game (working title: **"Skyward Catch"**)
+# Project Plan — Drone Catchers
 
 This folder is Claude's build bible for the game. Read this file first at the start of every work session, then `PROGRESS.md`, then the current stage in `STAGES.md`.
 
