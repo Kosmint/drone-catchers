@@ -226,6 +226,10 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - uses: google-github-actions/run-gemini-cli@v0
+        env:
+          # Headless CI: Gemini CLI refuses untrusted folders and exits before doing anything.
+          # The checkout is our own repo, so trust it.
+          GEMINI_CLI_TRUST_WORKSPACE: "true"
         with:
           # Each human pays for their own Gemini: pick the key of the Issue's owner.
           gemini_api_key: ${{ needs.route.outputs.owner == 'Cagan2112' && secrets.GEMINI_API_KEY_CAGAN || secrets.GEMINI_API_KEY_KOSMINT }}
