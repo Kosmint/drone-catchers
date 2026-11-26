@@ -1,0 +1,2 @@
+# Studio stores scripts with LF line endings; keep the files that Rojo syncs the same.
+*.luau text eol=lf
