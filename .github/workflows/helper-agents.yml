@@ -190,6 +190,8 @@ jobs:
       pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
+      # Headless Gemini CLI refuses to run in an untrusted folder (exits before calling the API).
+      GEMINI_CLI_TRUST_WORKSPACE: 'true'
     steps:
       - uses: actions/checkout@v4
         with:
