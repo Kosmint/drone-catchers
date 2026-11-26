@@ -328,13 +328,13 @@ Set-AgySettings $script:Root
 # Check that agy is signed in before waiting for work.
 $checkLog = Join-Path $LogDir 'login-check.log'
 Write-Log 'Checking the Antigravity CLI sign-in...'
-# The check also proves that agy can run the gate: it must print the git version through it.
-[System.IO.File]::WriteAllText((Join-Path $script:Root $CmdFileName), "git`n--version`n", $Utf8)
-$checkPrompt = (Get-GateNote) + "`nTest: run git --version through the gate now (the file $CmdFileName already contains it). Then reply with the gate output and the word OK."
+# The check also proves that agy can run the gate: it must print true for git rev-parse --is-inside-work-tree through it.
+[System.IO.File]::WriteAllText((Join-Path $script:Root $CmdFileName), "git`nrev-parse`n--is-inside-work-tree`n", $Utf8)
+$checkPrompt = (Get-GateNote) + "`nTest: run git rev-parse --is-inside-work-tree through the gate now (the file $CmdFileName already contains it). Then reply with the gate output and the word OK."
 $code = Invoke-Agy $checkPrompt $checkLog 3
 $checkText = ''
 if (Test-Path $checkLog) { $checkText = [System.IO.File]::ReadAllText($checkLog) }
-if ($code -eq 0 -and $checkText -notmatch 'git version') {
+if ($code -eq 0 -and $checkText -notmatch '(?m)^\s*true\s*$') {
     Write-Log 'agy ran, but it could not run git through the gate script. Last lines of its output:'
     Get-Content $checkLog -Tail 8 -ErrorAction SilentlyContinue | ForEach-Object { Write-Log "    $_" }
     throw 'The permission setup does not work (see AUTOMATION.md, If agy is blocked). Fix it, then start this script again.'
