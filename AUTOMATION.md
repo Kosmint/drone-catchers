@@ -60,11 +60,16 @@ comments.
 - Cloud: one run per Issue at a time, 60 minutes max, limited turns. The workflow token can't push
   to `main` (protected) or change `.github/`. The prompt is always read from `main`.
 - Local Gemini: one Issue per round, 50 minutes max, `agy --mode accept-edits` (file edits in the
-  clone are automatic). Shell commands other than `git` and `gh` are refused. The runner adds these
-  rules to `%USERPROFILE%\.gemini\antigravity-cli\settings.json` (original kept as
-  `settings.json.before-drone-catchers`): allow `git`, `gh`; deny force push, `gh pr merge`,
-  `gh secret`/`variable`/`auth`/`workflow`/`label`, `gh repo delete`. The deny rules also apply when
-  you use Antigravity yourself. The prompt is always read from `main`.
+  clone are automatic). agy headless matches `command(...)` allow-rules against the **whole command
+  line, exactly** (no prefix or wildcard: `command(git)` never matches `git status`), so the runner
+  grants ONE exact command: `scripts/agy-git.ps1`, copied to `%LOCALAPPDATA%\drone-catchers-gemini\`
+  on every start. The agent writes its command to `.agy-cmd.txt` (line 1 `git` or `gh`, then one
+  argument per line) and runs the gate, which runs only `git`/`gh` directly (no shell) and refuses
+  force push, push to `main`, `git config`, `gh pr merge`, `gh secret`/`variable`/`auth`/`workflow`,
+  labels other than `soru`, assignee changes, non-GET `gh api`, and similar. The runner adds the exact
+  allow rule and some deny rules to `%USERPROFILE%\.geminintigravity-cli\settings.json` (original
+  kept as `settings.json.before-drone-catchers`); your other settings stay. The prompt is always read
+  from `main`.
 - Humans merge everything.
 - **Stop everything:** repo variable `AUTOMATION_ENABLED` ≠ `true` stops the cloud Claude; close the
   `gemini-helper.ps1` window to stop a local Gemini. For one Issue/PR: label `otomasyon-durdur`.
@@ -92,6 +97,12 @@ The Gemini API-key secrets are no longer used: delete `GEMINI_API_KEY_KOSMINT` a
    `-Once` does a single check; `-IntervalMinutes 30` checks more often.
    Logs: `%LOCALAPPDATA%\drone-catchers-gemini\`.
 6. Don't edit files in that folder yourself; the helper skips a round if it finds uncommitted changes.
+
+**If agy is blocked:** the log (`issue<N>-*.log`) says `a tool required the "command" permission that
+headless mode cannot prompt for`, and helper.log says "blocked by a permission rule". The start-up
+check fails the same way. Make sure `scripts/agy-git.ps1` is next to `gemini-helper.ps1` and that
+`settings.json` has the `command(powershell -NoProfile ... agy-git.ps1)` allow rule the runner adds.
+Do not use `--dangerously-skip-permissions`.
 
 Gemini CLI is not needed; uninstall it if you like (`npm uninstall -g @google/gemini-cli`).
 
