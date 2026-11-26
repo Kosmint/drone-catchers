@@ -23,12 +23,15 @@ A human plays it and merges (not the person whose agent wrote it)
 |---|---|---|---|
 | Lead (muhammet842, Claude) | muhammet842's PC, Studio open | muhammet842's Claude subscription | `/loop 1h Read .github/agents/lead-loop.md and run one cycle.` |
 | Kosmint's Claude | GitHub Actions | Kosmint's Claude subscription (`CLAUDE_CODE_OAUTH_TOKEN`) | the assignment, immediately |
-| Kosmint's Gemini | Kosmint's PC | Kosmint's Gemini subscription | `scripts/gemini-helper.ps1`, checks every hour |
-| Çağan's Gemini | Çağan's PC | Çağan's Gemini subscription | `scripts/gemini-helper.ps1`, checks every hour |
+| Kosmint's Gemini | Kosmint's PC, Antigravity CLI (`agy`) | Kosmint's Google AI Pro subscription | `scripts/gemini-helper.ps1`, checks every hour |
+| Çağan's Gemini | Çağan's PC, Antigravity CLI (`agy`) | Çağan's Google AI Pro subscription | `scripts/gemini-helper.ps1`, checks every hour |
+
+"Gemini helper" means the Antigravity agent (Gemini models). Gemini CLI no longer accepts Google AI
+Pro sign-ins (June 2026), so the runner uses the Antigravity CLI.
 
 Files: `.github/workflows/helper-agents.yml` (cloud trigger, Claude only), `.github/agents/helper.md`
 (what every helper is told, cloud or local), `.github/agents/lead-loop.md` (one lead cycle),
-`scripts/gemini-helper.ps1` and `scripts/gemini-policy.toml` (local Gemini helper).
+`scripts/gemini-helper.ps1` (local Gemini helper).
 
 ## What wakes a helper
 - **Assigning** the Issue to its human (exactly one assignee and one agent label).
@@ -56,9 +59,12 @@ comments.
 - Only `muhammet842`, `Kosmint` and `Cagan2112` can wake helpers; bots can't (no loops).
 - Cloud: one run per Issue at a time, 60 minutes max, limited turns. The workflow token can't push
   to `main` (protected) or change `.github/`. The prompt is always read from `main`.
-- Local Gemini: one Issue per round, 50 minutes max. Headless Gemini may only run `git` and `gh`
-  (`scripts/gemini-policy.toml`; no merge, no force push, no secrets, no `gh auth`/`repo`/`label`).
-  The prompt and the policy are always read from `main`.
+- Local Gemini: one Issue per round, 50 minutes max, `agy --mode accept-edits` (file edits in the
+  clone are automatic). Shell commands other than `git` and `gh` are refused. The runner adds these
+  rules to `%USERPROFILE%\.gemini\antigravity-cli\settings.json` (original kept as
+  `settings.json.before-drone-catchers`): allow `git`, `gh`; deny force push, `gh pr merge`,
+  `gh secret`/`variable`/`auth`/`workflow`/`label`, `gh repo delete`. The deny rules also apply when
+  you use Antigravity yourself. The prompt is always read from `main`.
 - Humans merge everything.
 - **Stop everything:** repo variable `AUTOMATION_ENABLED` ≠ `true` stops the cloud Claude; close the
   `gemini-helper.ps1` window to stop a local Gemini. For one Issue/PR: label `otomasyon-durdur`.
@@ -74,15 +80,20 @@ The Gemini API-key secrets are no longer used: delete `GEMINI_API_KEY_KOSMINT` a
 `GEMINI_API_KEY_CAGAN`, and delete the keys in Google AI Studio.
 
 ## Setup: local Gemini helper (Kosmint and Çağan, each on their own PC)
-1. Install Git, GitHub CLI and Node.js. Install Gemini CLI: `npm install -g @google/gemini-cli`.
-2. Log in: `gh auth login` (your own GitHub account). Then run `gemini` once and sign in with the
-   Google account that has the Gemini subscription; exit it.
-3. Clone the repo into a folder used **only** by this helper:
+1. Install Git and GitHub CLI, then log in: `gh auth login` (your own GitHub account).
+2. Install the Antigravity CLI in PowerShell: `irm https://antigravity.google/cli/install.ps1 | iex`,
+   then open a new terminal and check `agy --version`. (The Antigravity app alone is not enough.)
+3. Clone the repo into a folder used **only** by this helper, next to (not inside) your own clone:
    `git clone https://github.com/Kosmint/drone-catchers.git drone-catchers-gemini`
-4. In that folder: `powershell -ExecutionPolicy Bypass -File .\scripts\gemini-helper.ps1`
-   Keep the window open (and the PC awake). `-Once` does a single check; `-IntervalMinutes 30`
-   checks more often. Logs: `%LOCALAPPDATA%\drone-catchers-gemini\`.
-5. Don't edit files in that folder yourself; the helper skips a round if it finds uncommitted changes.
+4. In that folder run `agy` once: sign in with **Google OAuth** using the Google account that has
+   Google AI Pro, trust the folder, then `/quit`.
+5. In that folder: `powershell -ExecutionPolicy Bypass -File .\scripts\gemini-helper.ps1`
+   It first checks the sign-in, then looks for work. Keep the window open (and the PC awake).
+   `-Once` does a single check; `-IntervalMinutes 30` checks more often.
+   Logs: `%LOCALAPPDATA%\drone-catchers-gemini\`.
+6. Don't edit files in that folder yourself; the helper skips a round if it finds uncommitted changes.
+
+Gemini CLI is not needed; uninstall it if you like (`npm uninstall -g @google/gemini-cli`).
 
 ## Lead setup (muhammet842)
 - PC on, Roblox Studio open on the place, Claude Code in the repo folder with the Studio MCP.
