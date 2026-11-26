@@ -96,7 +96,9 @@ Update `plan/PROGRESS.md`, make sure `src/` matches Studio, commit on your branc
 and save the place if you changed Studio.
 
 ## Automation
-Helpers can also run in the cloud (GitHub Actions): assigning an Issue, or a team member's comment or
-review on it, wakes the right helper. The lead runs locally on a loop. Labels `soru`, `insan-karari`,
+Helpers run unattended: assigning an Issue, or a comment or review on it, wakes the right helper.
+Kosmint's Claude runs in GitHub Actions and starts at once; the Gemini helpers run on Kosmint's and
+Çağan's PCs (`scripts/gemini-helper.ps1`) and pick work up within the hour. Everyone uses their own
+subscription, no API keys. The lead runs locally on a loop. Labels `soru`, `insan-karari`,
 `lider-onayi`, `otomasyon-durdur` and the `#nobot` comment marker are explained in `AUTOMATION.md`.
-Cloud helpers follow `.github/agents/helper.md`; the lead's cycle is `.github/agents/lead-loop.md`.
+Helpers follow `.github/agents/helper.md`; the lead's cycle is `.github/agents/lead-loop.md`.

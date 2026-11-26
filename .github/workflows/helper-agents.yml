@@ -1,4 +1,5 @@
-# Starts a cloud helper agent when the lead hands it work on GitHub.
+# Starts the cloud Claude helper (Kosmint) when the lead hands it work on GitHub.
+# Gemini helpers run locally instead (scripts/gemini-helper.ps1).
 # How it works, setup and the kill switch: see AUTOMATION.md.
 name: Helper agents
 
@@ -89,9 +90,11 @@ jobs:
           elif has agent:gemini && ! has agent:claude; then AGENT=gemini
           else skip "Issue #$NUM needs exactly one agent label"; fi
 
-          # Which cloud helpers exist. The lead's own Issues (muhammet842) run locally, never here.
+          # Only Kosmint's Claude runs in the cloud. Gemini helpers run on their humans' PCs with
+          # their subscriptions (scripts/gemini-helper.ps1); the lead's own Issues run on the lead's PC.
+          [ "$AGENT" = "gemini" ] && skip "Gemini helpers run locally (scripts/gemini-helper.ps1)"
           case "$AGENT/$OWNER" in
-            claude/Kosmint|gemini/Kosmint|gemini/Cagan2112) ;;
+            claude/Kosmint) ;;
             *) skip "no cloud helper for $AGENT/$OWNER";;
           esac
 
@@ -146,7 +149,8 @@ jobs:
           {
             echo 'text<<PROMPT_EOF'
             echo "## This run"
-            echo "- Agent: $AGENT (cloud helper)"
+            echo "- Agent: $AGENT"
+            echo "- Where: cloud (GitHub Actions)"
             echo "- Working for: $OWNER"
             echo "- Issue: #$ISSUE"
             echo "- Pull request: ${PR:-none yet}"
@@ -175,71 +179,3 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           gh issue comment "$ISSUE" --body "Cloud Claude helper run failed or ran out of time: $RUN_URL. The lead will look at it."
-
-  gemini:
-    needs: route
-    if: needs.route.outputs.run == 'true' && needs.route.outputs.agent == 'gemini'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    concurrency:
-      group: helper-issue-${{ needs.route.outputs.issue }}
-      cancel-in-progress: false
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-    env:
-      GH_TOKEN: ${{ github.token }}
-      # Headless CI: Gemini CLI refuses untrusted folders and exits before calling the API.
-      # Set on the job (not the step) so it reaches every step inside run-gemini-cli.
-      # The checkout is our own repo, so trusting it is fine.
-      GEMINI_CLI_TRUST_WORKSPACE: 'true'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.route.outputs.branch || github.event.repository.default_branch }}
-          fetch-depth: 0
-
-      - name: Git identity
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Build prompt
-        id: prompt
-        env:
-          AGENT: gemini
-          OWNER: ${{ needs.route.outputs.owner }}
-          ISSUE: ${{ needs.route.outputs.issue }}
-          PR: ${{ needs.route.outputs.pr }}
-          BRANCH: ${{ needs.route.outputs.branch }}
-          TRIGGER: ${{ needs.route.outputs.trigger }}
-        run: |
-          {
-            echo 'text<<PROMPT_EOF'
-            echo "## This run"
-            echo "- Agent: $AGENT (cloud helper)"
-            echo "- Working for: $OWNER"
-            echo "- Issue: #$ISSUE"
-            echo "- Pull request: ${PR:-none yet}"
-            echo "- Branch: ${BRANCH:-none yet}"
-            echo "- Trigger: $TRIGGER"
-            echo
-            git show origin/main:.github/agents/helper.md
-            echo 'PROMPT_EOF'
-          } >> "$GITHUB_OUTPUT"
-
-      - uses: google-github-actions/run-gemini-cli@v0
-        with:
-          # Each human pays for their own Gemini: pick the key of the Issue's owner.
-          gemini_api_key: ${{ needs.route.outputs.owner == 'Cagan2112' && secrets.GEMINI_API_KEY_CAGAN || secrets.GEMINI_API_KEY_KOSMINT }}
-          gemini_model: ${{ vars.HELPER_GEMINI_MODEL }}
-          prompt: ${{ steps.prompt.outputs.text }}
-
-      - name: Report failure on the Issue
-        if: failure()
-        env:
-          ISSUE: ${{ needs.route.outputs.issue }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          gh issue comment "$ISSUE" --body "Cloud Gemini helper run failed or ran out of time: $RUN_URL. The lead will look at it."
