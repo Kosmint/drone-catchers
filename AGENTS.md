@@ -91,3 +91,9 @@ The live game is in Roblox Studio (Team Create). `src/` mirrors the scripts.
 ## End of a work session
 Update `plan/PROGRESS.md`, make sure `src/` matches Studio, commit on your branch, open/update the PR,
 and save the place if you changed Studio.
+
+## Automation
+Helpers can also run in the cloud (GitHub Actions): assigning an Issue, or a team member's comment or
+review on it, wakes the right helper. The lead runs locally on a loop. Labels `soru`, `insan-karari`,
+`lider-onayi`, `otomasyon-durdur` and the `#nobot` comment marker are explained in `AUTOMATION.md`.
+Cloud helpers follow `.github/agents/helper.md`; the lead's cycle is `.github/agents/lead-loop.md`.
