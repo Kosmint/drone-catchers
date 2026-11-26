@@ -61,14 +61,25 @@ lead. Anyone else → you are a helper. If unsure, act as a helper.
 - Update `plan/PROGRESS.md` in the same PR when you finish a checklist item.
 
 ## Roblox Studio: one agent at a time
-The live game is in Roblox Studio (Team Create). `src/` mirrors the scripts.
+The live game is in Roblox Studio (Team Create).
 - **Only one agent drives the Studio MCP at a time.** Studio work (scenery, uploads, playtests)
   belongs to whoever holds an Issue labelled `studio`. Others edit files only.
-- `default.project.json` maps `src/` for **Rojo** (when the team turns Rojo sync on, `src/` becomes
-  the source of truth). Until then, whoever changes a script in Studio must export it to `src/` in
-  the same PR, and byte-check Studio vs file.
 - Code that only lives in Studio (not in `src/`): `ReplicatedStorage.Assets`, `ReplicatedStorage.Inputs`,
-  remotes, Workspace scenery. Don't delete them.
+  Workspace scenery. Don't delete them. (Remotes are created at runtime by `Net.init()`.)
+
+## Rojo: `src/` is the source of truth for scripts
+Rojo (version pinned in `rokit.toml`) live-syncs `src/` into the place. It manages only the script
+folders in `default.project.json` (`ReplicatedStorage.Shared`, `ServerScriptService.ServerMain` +
+`Services`, `StarterPlayerScripts.ClientMain` + `Controllers`); everything else stays in Team Create.
+- **Never edit scripts in Studio.** Change the `.luau` file; a Studio edit is overwritten on the next sync.
+- **Only the lead syncs into the Team Create place**, from its own clone (`rojo serve`, then
+  Connect in the Rojo plugin). The project only connects to place 75170479657945 (`servePlaceIds`).
+  The lead keeps that clone on `main`, switches to a PR branch only to test it, then back to `main`.
+- **Helpers and humans test on a local copy:** in Studio, File → Download a Copy, open the `.rbxl`,
+  run your own `rojo serve` and Connect to that copy. Never connect to the Team Create place, and
+  never commit the `.rbxl`.
+- New script = new file under a mapped folder (`.server.luau` / `.client.luau` / `.luau`). `.luau`
+  files are stored with LF (`.gitattributes`).
 
 ## Project facts agents keep getting wrong
 - Flight is 2.5D: the drone moves on an X/Y plane at `Balance.flight.origin` (20000, 100, 0), seen by a
@@ -92,8 +103,8 @@ The live game is in Roblox Studio (Team Create). `src/` mirrors the scripts.
 - PowerShell 5.1 mangles UTF-8: use .NET `ReadAllText`/`WriteAllText` with UTF-8 (no BOM).
 
 ## End of a work session
-Update `plan/PROGRESS.md`, make sure `src/` matches Studio, commit on your branch, open/update the PR,
-and save the place if you changed Studio.
+Update `plan/PROGRESS.md`, commit on your branch, open/update the PR, and save the place if you
+changed Studio (the lead: put the synced clone back on `main` first).
 
 ## Automation
 Helpers run unattended: assigning an Issue, or a comment or review on it, wakes the right helper.

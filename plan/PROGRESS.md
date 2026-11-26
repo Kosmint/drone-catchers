@@ -51,7 +51,8 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [ ] Drone polish (thruster glow, lights, deploy anim)
 - [ ] Mobile HUD check (Device Simulator)
 - Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
-**Last session:** 2026-11-25 — demo-style sky reset built + playtested (deploy, Sunset Heights, Edge of Space), scripts in `src/` byte-verified, place saved (Roblox version 36).
+- [x] Rojo live-sync on (#12): Rojo 7.7.1 (`rokit.toml`), plugin 7.7.1, `servePlaceIds` locked to this place, `.luau` at LF. First connect changed nothing (33 scripts hash-identical before and after). From now on `src/` is the source of truth; only the lead syncs (see `AGENTS.md`).
+**Last session:** 2026-11-26 — automation tested (cloud Claude + local Gemini), Rojo turned on, place saved before connecting (Roblox version 38).
 
 ## Stage 1 checklist
 - [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
