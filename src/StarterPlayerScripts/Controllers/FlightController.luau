@@ -275,10 +275,18 @@ end
 
 local function updateModel(dt: number)
 	if not root then return end
-	state.bounce = math.max(0, state.bounce - dt * 4)
-	local bounceY = -math.sin(state.bounce * math.pi) * 0.6
+	state.bounce = math.max(0, state.bounce - dt * 3.2)
+	-- gulp: quick dip as it swallows, then a hop up with a nose-up tilt that settles
+	local e = 1 - state.bounce -- 0..1 since the catch
+	local bounceY, bounceTilt = 0, 0
+	if state.bounce > 0 then
+		local dip = -math.sin(math.clamp(e / 0.25, 0, 1) * math.pi) * 0.35
+		local hop = math.sin(math.clamp((e - 0.15) / 0.85, 0, 1) * math.pi) * 0.9
+		bounceY = dip + hop
+		bounceTilt = math.sin(e * math.pi * 2) * 0.16 * state.bounce
+	end
 	local cf = CFrame.new(FlightController.dronePosition() + Vector3.new(0, bounceY, 0))
-		* CFrame.Angles(0, 0, -state.tilt)
+		* CFrame.Angles(0, 0, -state.tilt + bounceTilt)
 		* POSE
 	root.CFrame = cf
 	-- rotors: faster when moving

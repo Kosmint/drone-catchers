@@ -71,6 +71,14 @@ local YAW_RIGHT = math.rad(-12) -- slight 3/4 turn toward the camera
 local YAW_LEFT = -math.pi + math.rad(12)
 local MAX_PITCH = math.rad(55)
 local HIDDEN = CFrame.new(0, -10000, 0)
+local INTAKE_TIME = 0.45 -- seconds from confirmed catch to swallowed
+local FLASH_TIME = 0.22
+
+-- intake flash: one part per run (light + sparkles), reused for every catch
+local flash: BasePart? = nil
+local flashLight: PointLight? = nil
+local flashEmitter: ParticleEmitter? = nil
+local flashLeft = 0
 
 ----------------------------------------------------------------------------
 -- models (pooled)
@@ -203,6 +211,31 @@ function CreatureSimClient.begin(plan: SpawnGen.Plan)
 	f.Name = "Creatures"
 	f.Parent = workspace:FindFirstChild("FlightSpace") or workspace
 	folder = f
+	local fp = Instance.new("Part")
+	fp.Name = "IntakeFlash"
+	fp.Anchored, fp.CanCollide, fp.CanQuery, fp.CanTouch, fp.CastShadow = true, false, false, false, false
+	fp.Transparency = 1
+	fp.Size = Vector3.one * 0.5
+	fp.CFrame = HIDDEN
+	local fl = Instance.new("PointLight")
+	fl.Color = Color3.fromRGB(255, 244, 200)
+	fl.Range = 16
+	fl.Brightness = 0
+	fl.Shadows = false
+	fl.Parent = fp
+	local em = Instance.new("ParticleEmitter")
+	em.Enabled = false
+	em.Rate = 0
+	em.Lifetime = NumberRange.new(0.2, 0.35)
+	em.Speed = NumberRange.new(10, 18)
+	em.SpreadAngle = Vector2.new(180, 180)
+	em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.1), NumberSequenceKeypoint.new(1, 0) })
+	em.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	em.Color = ColorSequence.new(Color3.fromRGB(255, 252, 225), Color3.fromRGB(255, 214, 120))
+	em.LightEmission = 1
+	em.Parent = fp
+	fp.Parent = f
+	flash, flashLight, flashEmitter, flashLeft = fp, fl, em, 0
 	for _, zp in plan.zones do
 		zoneQueues[zp.zone] = { queue = zp.queue, nextIndex = 1, from = zp.from, to = zp.to }
 		-- activate exactly `active` entries (a swarm straddling the limit comes in whole)
@@ -219,6 +252,7 @@ function CreatureSimClient.finish()
 	table.clear(zoneQueues)
 	if folder then folder:Destroy() end
 	folder = nil
+	flash, flashLight, flashEmitter, flashLeft = nil, nil, nil, 0
 	-- pooled models were parented to nil; drop them so a new run rebuilds cleanly
 	for _, pool in pools do
 		for _, m in pool do m:Destroy() end
@@ -326,21 +360,36 @@ end
 -- droneX/Y: flight-plane coords; nozzle: world position; camX/Y: camera centre (flight coords)
 function CreatureSimClient.update(dt: number, droneX: number, droneY: number, droneSpeed: number, nozzle: Vector3, camX: number, camY: number)
 	stepGroups(dt)
+	-- intake flash decay
+	if flashLeft > 0 and flashLight then
+		flashLeft = math.max(0, flashLeft - dt)
+		local k = flashLeft / FLASH_TIME
+		flashLight.Brightness = 6 * k * k
+	end
 	local i = 1
 	while i <= #live do
 		local l = live[i]
 		if l.caught then
-			-- intake: spiral toward the nozzle, shrink, vanish
-			l.intake = math.min(1, l.intake + dt / 0.35)
+			-- intake: corkscrew along the beam line to the nozzle (accelerating), then swallowed
+			l.intake = math.min(1, l.intake + dt / INTAKE_TIME)
 			local t = l.intake * l.intake
 			local nx, ny = nozzle.X - ORIGIN.X, nozzle.Y - ORIGIN.Y
-			local spin = (1 - t) * 2.5
-			local ox = (l.intakeFrom.X - nx) * (1 - t)
-			local oy = (l.intakeFrom.Y - ny) * (1 - t)
-			l.x = nx + ox * math.cos(spin * t * 6) - oy * math.sin(spin * t * 6)
-			l.y = ny + ox * math.sin(spin * t * 6) + oy * math.cos(spin * t * 6)
+			local dx, dy = l.intakeFrom.X - nx, l.intakeFrom.Y - ny
+			-- centre travels the straight beam line; the offset swings around it and shrinks
+			local ang = l.intake * 9
+			local rad = math.sin(l.intake * math.pi) * 2.5 * (1 - l.intake)
+			local len = math.max(0.01, math.sqrt(dx * dx + dy * dy))
+			local px, py = -dy / len, dx / len -- perpendicular to the beam
+			l.x = nx + dx * (1 - t) + px * rad * math.cos(ang)
+			l.y = ny + dy * (1 - t) + py * rad * math.sin(ang)
 			if l.intake >= 1 then
 				l.done = true
+				if flash and flashLight and flashEmitter then
+					flash.CFrame = CFrame.new(nozzle)
+					flashLight.Brightness = 6
+					flashLeft = FLASH_TIME
+					flashEmitter:Emit(8)
+				end
 				local info = l.catchInfo
 				if info then CatchEvents.Landed:Fire(info) end
 			end
@@ -387,7 +436,21 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 			-- bank into turns (fast yaw change) + gentle idle roll
 			local bob = math.sin(l.ph * 2.2) * 0.25
 			local roll = math.sin(l.ph * 1.6) * 0.06 + math.clamp((targetYaw - l.yaw) * 0.25, -0.35, 0.35)
-			local shrink = if l.caught then 1 - l.intake * l.intake * 0.9 else 1
+			-- squash & stretch: bulge back first, stretch while flying in, squash at the intake
+			local shrink = 1
+			local stretchPitch, stretchRoll = 0, 0
+			if l.caught then
+				local u = l.intake
+				if u < 0.2 then
+					shrink = 1 + 0.18 * math.sin(u / 0.2 * math.pi * 0.5) -- wind-up bulge
+				else
+					local v = (u - 0.2) / 0.8
+					shrink = 1.18 * (1 - v * v) * (1 + 0.12 * math.sin(v * math.pi * 3)) + 0.05 * v * v
+				end
+				-- lean into the pull and tumble
+				stretchPitch = math.sin(u * math.pi) * 0.5
+				stretchRoll = u * u * 5
+			end
 			-- beamed: faster, bigger wobble as the pull locks in + a small lean toward the drone
 			local wobble = 0
 			if l.beamed then
@@ -398,10 +461,10 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 			local cf = CFrame.new(ORIGIN.X + l.x, ORIGIN.Y + l.y + bob, ORIGIN.Z)
 				* CAM_PITCH
 				* CFrame.Angles(0, l.yaw, 0)
-				* CFrame.Angles(roll, 0, l.pitch + wobble)
+				* CFrame.Angles(roll + stretchRoll, 0, l.pitch + wobble + stretchPitch)
 			root.CFrame = cf
-			if shrink < 0.999 then
-				-- intake shrink (one creature for 0.35 s; scale is restored on release)
+			if l.caught then
+				-- intake pulse (scale is restored on release)
 				(l.model :: Model):ScaleTo(math.max(0.05, l.scale * shrink))
 			end
 			if l.light then
