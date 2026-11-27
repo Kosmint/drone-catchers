@@ -314,17 +314,21 @@ function SkyController.update(dt: number)
 		end
 	end
 
-	-- Earth curve with its blue rim
+	-- Earth curve with its blue rim: sinks and shrinks slightly as the drone climbs
 	local ea = clamp01((alt - 3700) / 900)
 	if earthCard and #earthLabels > 0 then
 		earthCard.gui.Enabled = ea > 0
 		if ea > 0 then
 			for _, l in earthLabels do l.ImageTransparency = 1 - ea end
 			local e = SkyArt.earth
+			local t = clamp01((alt - e.altStart) / (e.altEnd - e.altStart))
+			local scale = e.scaleStart + (e.scaleEnd - e.scaleStart) * t
+			local fill = e.fillStart + (e.fillEnd - e.fillStart) * t
+			local curveTop = VIEW_UNITS * (1 - fill)
 			local ecx = wUnits / 2 - cx * 0.05
-			local ecy = VIEW_UNITS + (1300 - (alt - 4600) * 0.22)
-			local top = ecy - e.radius - e.topU
-			placeScreen(earthCard, ecx, top + e.unitsH / 2, e.unitsW, e.unitsH)
+			local top = curveTop - e.topU * scale
+			local h = e.unitsH * scale
+			placeScreen(earthCard, ecx, top + h / 2, e.unitsW * scale, h)
 		end
 	end
 end
