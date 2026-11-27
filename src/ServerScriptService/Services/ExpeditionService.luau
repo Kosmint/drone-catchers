@@ -21,6 +21,7 @@ local Rarities = require(Shared.Config.Rarities)
 local Modifiers = require(Shared.Config.Modifiers)
 local Stats = require(Shared.Stats)
 local SpawnGen = require(Shared.SpawnGen)
+local EpicBlink = require(Shared.EpicBlink)
 local DataService = require(script.Parent.DataService)
 local DebugService = require(script.Parent.DebugService)
 
@@ -204,6 +205,16 @@ local function onReportCatch(player: Player, runId: unknown, spawnId: unknown)
 	local gap = math.max(Balance.expedition.minCatchGap, rarity.resist / run.stats.beamStrength * Balance.expedition.resistGapFactor)
 	if spawn.group == run.lastGroup then gap = 0.1 end -- swarm members are pulled together
 	if now - run.lastCatchAt < gap then return { ok = false, reason = "fast" } end
+	if EpicBlink.applies(rarity.id) then
+		-- Epics blink away while pulled (count from the run seed, never from the client):
+		-- the pull can't be shorter than the full pull + lost progress + re-grab delays,
+		-- counted from the last catch and from the launch.
+		local blinks = EpicBlink.plan(run.seed, spawn.id).count
+		local need = EpicBlink.minCatchTime(rarity.resist, run.stats.beamStrength, blinks)
+		if math.min(now - run.lastCatchAt, now - run.startedAt) < need then
+			return { ok = false, reason = "fast" }
+		end
+	end
 
 	run.caught[spawn.id] = true
 	run.caughtInZone[spawn.zone] = caughtHere + 1

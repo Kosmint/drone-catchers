@@ -3,6 +3,7 @@
 -- deterministic spawn plan. Behaviours in Stage 1: Drifter, Skittish (darts away
 -- from a fast-approaching drone, like a fish), Swarm (schools; members orbit a
 -- moving centre). Others fall back to Drifter until Stage 3.
+-- Epic creatures blink away while being pulled (Shared/EpicBlink, Balance.epicBlink).
 -- Models are pooled per creature id and only exist near the camera.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,10 +13,12 @@ local Balance = require(Shared.Config.Balance)
 local Creatures = require(Shared.Config.Creatures)
 local Rarities = require(Shared.Config.Rarities)
 local SpawnGen = require(Shared.SpawnGen)
+local EpicBlink = require(Shared.EpicBlink)
 local CatchEvents = require(script.Parent.CatchEvents)
 
 local F = Balance.flight
 local S = Balance.spawns
+local EB = Balance.epicBlink
 local ORIGIN = F.origin
 local TWO_PI = math.pi * 2
 
@@ -48,6 +51,14 @@ export type Live = {
 	intakeFrom: Vector2,
 	catchInfo: CatchEvents.CatchInfo?, -- set on a confirmed catch; Landed fires with it
 	revealed: boolean, -- false = a Hidden creature the scanner hasn't found (not drawn, not beamable)
+	blink: EpicBlink.BlinkPlan?, -- Epic only: deterministic blink plan
+	blinksDone: number,
+	regrab: number, -- seconds left before the beam can grab it again after a blink
+	vanish: number, -- seconds left of the shrink-out before it jumps
+	appear: number, -- 0..1 pop-in after the jump (1 = normal)
+	blinkToX: number,
+	blinkToY: number,
+	blinkScaled: boolean, -- model is currently scaled by the blink effect
 	scale: number,
 	model: Model?,
 	root: BasePart?,
@@ -79,6 +90,12 @@ local flash: BasePart? = nil
 local flashLight: PointLight? = nil
 local flashEmitter: ParticleEmitter? = nil
 local flashLeft = 0
+
+-- blink effects: two parts per run (vanish spot, appear spot), reused for every blink
+type BlinkFx = { part: BasePart, light: PointLight, emitter: ParticleEmitter, left: number }
+local blinkFx: { BlinkFx } = {}
+local BLINK_FX_TIME = 0.3
+local runSeed = 0
 
 ----------------------------------------------------------------------------
 -- models (pooled)
@@ -170,6 +187,8 @@ local function activate(s: SpawnGen.Spawn)
 		progress = 0, beamed = false, pending = false, caught = false,
 		intake = 0, intakeFrom = Vector2.zero,
 		catchInfo = nil,
+		blink = if EpicBlink.applies(rarity.id) then EpicBlink.plan(runSeed, s.id) else nil,
+		blinksDone = 0, regrab = 0, vanish = 0, appear = 1, blinkToX = 0, blinkToY = 0, blinkScaled = false,
 		revealed = not (def.behavior == "Hidden" and Balance.scanner.hideHidden),
 		scale = scaleFor(rarity),
 		model = nil, root = nil, light = nil, done = false,
@@ -202,11 +221,49 @@ local function activateNext(zoneId: string)
 	until not s or s.group ~= group
 end
 
+local function buildBlinkFx(parent: Instance): BlinkFx
+	local p = Instance.new("Part")
+	p.Name = "BlinkFx"
+	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+	p.Transparency = 1
+	p.Size = Vector3.one * 0.5
+	p.CFrame = HIDDEN
+	local light = Instance.new("PointLight")
+	light.Range = 14
+	light.Brightness = 0
+	light.Shadows = false
+	light.Parent = p
+	local em = Instance.new("ParticleEmitter")
+	em.Enabled = false
+	em.Rate = 0
+	em.Lifetime = NumberRange.new(0.25, 0.45)
+	em.Speed = NumberRange.new(6, 14)
+	em.SpreadAngle = Vector2.new(180, 180)
+	em.Drag = 4
+	em.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0) })
+	em.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(1, 1) })
+	em.LightEmission = 1
+	em.Parent = p
+	p.Parent = parent
+	return { part = p, light = light, emitter = em, left = 0 }
+end
+
+local function playBlinkFx(fx: BlinkFx?, x: number, y: number, color: Color3)
+	if not fx then return end
+	fx.part.CFrame = CFrame.new(ORIGIN.X + x, ORIGIN.Y + y, ORIGIN.Z)
+	fx.light.Color = color
+	fx.light.Brightness = 4
+	fx.left = BLINK_FX_TIME
+	fx.emitter.Color = ColorSequence.new(Color3.new(1, 1, 1), color)
+	fx.emitter:Emit(12)
+end
+
 ----------------------------------------------------------------------------
 -- API
 ----------------------------------------------------------------------------
 function CreatureSimClient.begin(plan: SpawnGen.Plan)
 	CreatureSimClient.finish()
+	runSeed = plan.seed
 	local f = Instance.new("Folder")
 	f.Name = "Creatures"
 	f.Parent = workspace:FindFirstChild("FlightSpace") or workspace
@@ -236,6 +293,7 @@ function CreatureSimClient.begin(plan: SpawnGen.Plan)
 	em.Parent = fp
 	fp.Parent = f
 	flash, flashLight, flashEmitter, flashLeft = fp, fl, em, 0
+	blinkFx = { buildBlinkFx(f), buildBlinkFx(f) }
 	for _, zp in plan.zones do
 		zoneQueues[zp.zone] = { queue = zp.queue, nextIndex = 1, from = zp.from, to = zp.to }
 		-- activate exactly `active` entries (a swarm straddling the limit comes in whole)
@@ -253,6 +311,7 @@ function CreatureSimClient.finish()
 	if folder then folder:Destroy() end
 	folder = nil
 	flash, flashLight, flashEmitter, flashLeft = nil, nil, nil, 0
+	table.clear(blinkFx) -- parts die with the folder
 	-- pooled models were parented to nil; drop them so a new run rebuilds cleanly
 	for _, pool in pools do
 		for _, m in pool do m:Destroy() end
@@ -266,7 +325,26 @@ end
 
 -- Can the beam (and auto-aim) target it right now?
 function CreatureSimClient.isTargetable(l: Live): boolean
-	return l.revealed and not l.caught and not l.pending
+	return l.revealed and not l.caught and not l.pending and l.regrab <= 0
+end
+
+-- Called by the beam after it adds progress. An Epic that crosses its next blink
+-- threshold blinks: the link breaks (progress drops, not targetable for
+-- regrabDelay) and it jumps behind / left / right of the beam origin (bx, by).
+-- Returns true if it blinked.
+function CreatureSimClient.tryBlink(l: Live, bx: number, by: number): boolean
+	local plan = l.blink
+	if not plan or l.blinksDone >= plan.count or l.pending or l.caught then return false end
+	if l.progress < EB.thresholds[l.blinksDone + 1] then return false end
+	l.blinksDone += 1
+	l.blinkToX, l.blinkToY = EpicBlink.spot(plan.spots[l.blinksDone], bx, by, l.x, l.y, l.zoneFrom, l.zoneTo)
+	l.progress = EB.keepProgress
+	l.beamed = false
+	l.regrab = EB.regrabDelay
+	l.vanish = EB.vanishTime
+	l.dartX, l.dartY = 0, 0
+	playBlinkFx(blinkFx[1], l.x, l.y, l.rarity.color)
+	return true
 end
 
 -- Scanner found a Hidden creature: draw it and let the beam target it.
@@ -366,9 +444,31 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 		local k = flashLeft / FLASH_TIME
 		flashLight.Brightness = 6 * k * k
 	end
+	for _, fx in blinkFx do
+		if fx.left > 0 then
+			fx.left = math.max(0, fx.left - dt)
+			local k = fx.left / BLINK_FX_TIME
+			fx.light.Brightness = 4 * k * k
+		end
+	end
 	local i = 1
 	while i <= #live do
 		local l = live[i]
+		if l.regrab > 0 then l.regrab = math.max(0, l.regrab - dt) end
+		if l.vanish > 0 then
+			-- shrinking out at the old spot; then jump and pop in at the new one
+			l.vanish -= dt
+			if l.vanish <= 0 then
+				l.vanish = 0
+				l.x, l.y = l.blinkToX, l.blinkToY
+				l.px, l.py = l.x, l.y -- no velocity spike from the jump
+				l.svx, l.svy = 0, 0
+				l.appear = 0
+				playBlinkFx(blinkFx[2], l.x, l.y, l.rarity.color)
+			end
+		elseif l.appear < 1 then
+			l.appear = math.min(1, l.appear + dt / EB.appearTime)
+		end
 		if l.caught then
 			-- intake: corkscrew along the beam line to the nozzle (accelerating), then swallowed
 			l.intake = math.min(1, l.intake + dt / INTAKE_TIME)
@@ -393,7 +493,7 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 				local info = l.catchInfo
 				if info then CatchEvents.Landed:Fire(info) end
 			end
-		elseif not l.pending then
+		elseif not l.pending and l.vanish <= 0 then
 			stepBehaviour(l, dt, droneX, droneY, droneSpeed)
 		end
 
@@ -466,6 +566,18 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 			if l.caught then
 				-- intake pulse (scale is restored on release)
 				(l.model :: Model):ScaleTo(math.max(0.05, l.scale * shrink))
+			elseif l.vanish > 0 or l.appear < 1 then
+				-- blink: shrink out, then pop back in with a small overshoot
+				local a = l.appear
+				local b = if l.vanish > 0 then l.vanish / EB.vanishTime
+					else 1 - (1 - a) ^ 3 + 0.3 * math.sin(a * math.pi) * (1 - a)
+				local m = l.model :: Model
+				m:ScaleTo(math.max(0.05, l.scale * b))
+				l.blinkScaled = true
+			elseif l.blinkScaled then
+				local m = l.model :: Model
+				m:ScaleTo(l.scale)
+				l.blinkScaled = false
 			end
 			if l.light then
 				l.light.Brightness = (0.6 + l.rarity.rank * 0.35) * (0.75 + 0.25 * math.sin(l.ph * 3)) * (1 + l.progress)

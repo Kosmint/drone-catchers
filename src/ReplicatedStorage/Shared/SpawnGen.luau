@@ -35,6 +35,7 @@ export type ZonePlan = {
 }
 
 export type Plan = {
+	seed: number, -- run seed (EpicBlink derives per-spawn plans from it)
 	zones: { ZonePlan },
 	byId: { [number]: Spawn },
 }
@@ -45,7 +46,7 @@ function SpawnGen.build(seed: number, chapterId: number, maxAltitude: number, ev
 	local rng = Random.new(seed)
 	local cfg = Balance.spawns
 	local halfWidth = Balance.flight.halfWidth - 10
-	local plan: Plan = { zones = {}, byId = {} }
+	local plan: Plan = { seed = seed, zones = {}, byId = {} }
 	local nextId = 1
 	local group = 0
 
