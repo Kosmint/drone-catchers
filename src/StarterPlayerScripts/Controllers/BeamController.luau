@@ -2,8 +2,8 @@
 -- BeamController: the suction beam. Aim (mouse / right stick / touch auto-aim),
 -- cone targeting, pull progress (beamStrength / resistance), Rare+ struggle,
 -- swarm multi-pull, catch requests to the server (which rolls modifier + size).
--- Stage 1 visuals: a camera-facing light wedge + tether + progress tag.
--- Stage 2 replaces them with the final beam VFX and catch celebrations.
+-- Visuals (built once per run): rarity-tinted glow + core wedge, energy tether with
+-- flowing particles, progress tag, struggle kick and catch-snap flash.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -17,6 +17,9 @@ local CatchEvents = require(script.Parent.CatchEvents)
 local B = Balance.beam
 local ORIGIN = Balance.flight.origin
 local BEAM_CYAN = Color3.fromRGB(79, 216, 255)
+local BEAM_TEXTURE = "rbxasset://textures/particles/sparkles_main.dds"
+local KICK_TIME = 0.15
+local FLASH_TIME = 0.2
 
 local BeamController = {}
 -- A confirmed catch fires CatchEvents.Caught(info, live) (see CatchEvents).
@@ -36,8 +39,16 @@ local t = 0
 local folder: Folder? = nil
 local endPart: BasePart? = nil
 local tetherPart: BasePart? = nil
-local wedge: Beam? = nil
+local wedge: Beam? = nil -- outer glow
+local core: Beam? = nil
 local tether: Beam? = nil
+local tetherCore: Beam? = nil
+local flow: ParticleEmitter? = nil
+local flashPart: BasePart? = nil
+local flashEmitter: ParticleEmitter? = nil
+local flashT = 0 -- remaining catch-flash time
+local kickT = 0 -- remaining struggle-kick time
+local smoothProg = 0
 local tag: BillboardGui? = nil
 local tagFill: Frame? = nil
 local tagLabel: TextLabel? = nil
@@ -67,42 +78,114 @@ local function buildVisuals(nozzle: Attachment?)
 	local ta = Instance.new("Attachment"); ta.Parent = tp
 	endPart, tetherPart = e, tp
 
+	-- outer glow: wide, saturated, only partly additive so it still shows over white clouds
 	local w = Instance.new("Beam")
-	w.Name = "Wedge"
+	w.Name = "Glow"
 	w.Attachment0 = nozzle
 	w.Attachment1 = ea
 	w.FaceCamera = true
-	w.LightEmission = 1
+	w.LightEmission = 0.4
 	w.LightInfluence = 0
 	w.Segments = 1
-	w.Width0 = 0.6
+	w.Width0 = 0.9
 	w.Width1 = 18
-	w.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.35),
-		NumberSequenceKeypoint.new(0.7, 0.75),
-		NumberSequenceKeypoint.new(1, 1),
-	})
 	w.Enabled = false
 	w.Parent = e
 	wedge = w
 
+	-- bright core: narrow, fully additive, scrolling sparkle texture
+	local c = Instance.new("Beam")
+	c.Name = "Core"
+	c.Attachment0 = nozzle
+	c.Attachment1 = ea
+	c.FaceCamera = true
+	c.LightEmission = 1
+	c.LightInfluence = 0
+	c.Segments = 1
+	c.Texture = BEAM_TEXTURE
+	c.TextureMode = Enum.TextureMode.Wrap
+	c.TextureLength = 4
+	c.Width0 = 0.4
+	c.Width1 = 5
+	c.Enabled = false
+	c.Parent = e
+	core = c
+
+	-- tether: curvy energy line to the target (outer + inner so it reads on any background)
 	local th = Instance.new("Beam")
 	th.Name = "Tether"
 	th.Attachment0 = nozzle
 	th.Attachment1 = ta
 	th.FaceCamera = true
-	th.LightEmission = 1
+	th.LightEmission = 0.5
 	th.LightInfluence = 0
-	th.Segments = 12
+	th.Segments = 24
 	th.Width0 = 0.5
 	th.Width1 = 1.6
-	th.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.2),
-		NumberSequenceKeypoint.new(1, 0.45),
-	})
 	th.Enabled = false
 	th.Parent = tp
 	tether = th
+
+	local ti = Instance.new("Beam")
+	ti.Name = "TetherCore"
+	ti.Attachment0 = nozzle
+	ti.Attachment1 = ta
+	ti.FaceCamera = true
+	ti.LightEmission = 1
+	ti.LightInfluence = 0
+	ti.Segments = 24
+	ti.Texture = BEAM_TEXTURE
+	ti.TextureMode = Enum.TextureMode.Wrap
+	ti.TextureLength = 2
+	ti.Width0 = 0.2
+	ti.Width1 = 0.7
+	ti.Enabled = false
+	ti.Parent = tp
+	tetherCore = ti
+
+	-- particles flowing from the creature toward the nozzle (part is oriented toward the nozzle)
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Flow"
+	pe.Texture = BEAM_TEXTURE
+	pe.EmissionDirection = Enum.NormalId.Front
+	pe.Lifetime = NumberRange.new(0.5)
+	pe.Speed = NumberRange.new(20)
+	pe.Rate = 0
+	pe.Enabled = false
+	pe.LightEmission = 1
+	pe.LightInfluence = 0
+	pe.SpreadAngle = Vector2.new(8, 8)
+	pe.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.9),
+		NumberSequenceKeypoint.new(1, 0.1),
+	})
+	pe.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	pe.Parent = tp
+	flow = pe
+
+	-- catch flash at the nozzle (Emit on Caught)
+	local fp = anchorPart("Flash", f)
+	local fe = Instance.new("ParticleEmitter")
+	fe.Name = "Snap"
+	fe.Texture = BEAM_TEXTURE
+	fe.Rate = 0
+	fe.Lifetime = NumberRange.new(0.25)
+	fe.Speed = NumberRange.new(0)
+	fe.LightEmission = 1
+	fe.LightInfluence = 0
+	fe.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 2),
+		NumberSequenceKeypoint.new(1, 7),
+	})
+	fe.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	fe.Parent = fp
+	flashPart, flashEmitter = fp, fe
 
 	-- progress tag above the creature being pulled
 	local bb = Instance.new("BillboardGui")
@@ -167,6 +250,18 @@ local function requestCatch(l: CreatureSimClient.Live)
 	end)
 end
 
+BeamController.Struggle:Connect(function()
+	kickT = KICK_TIME
+end)
+
+CatchEvents.Caught:Connect(function()
+	if flashEmitter then
+		flashEmitter.Color = ColorSequence.new(Color3.new(1, 1, 1), BEAM_CYAN)
+		flashEmitter:Emit(2)
+		flashT = FLASH_TIME
+	end
+end)
+
 ----------------------------------------------------------------------------
 -- API
 ----------------------------------------------------------------------------
@@ -185,6 +280,8 @@ function BeamController.finish()
 	run = nil
 	if folder then folder:Destroy() end
 	folder, endPart, tetherPart, wedge, tether, tag, tagFill, tagLabel = nil, nil, nil, nil, nil, nil, nil, nil
+	core, tetherCore, flow, flashPart, flashEmitter = nil, nil, nil, nil, nil
+	flashT, kickT, smoothProg = 0, 0, 0
 	if nozzleLight then nozzleLight.Brightness = 0 end
 	nozzleLight = nil
 end
@@ -296,39 +393,86 @@ function BeamController.update(dt: number, held: boolean, aimPoint: Vector3?, fl
 
 	-- visuals
 	local color = if best then best.rarity.color else BEAM_CYAN
-	if wedge and endPart then
+	local prog = if best then math.clamp(best.progress, 0, 1) else 0
+	smoothProg += (prog - smoothProg) * (1 - math.exp(-10 * dt))
+	kickT = math.max(0, kickT - dt)
+	flashT = math.max(0, flashT - dt)
+	local kick = kickT / KICK_TIME -- 1 -> 0
+	-- struggle: random flicker + wider kick; locked-in look grows with progress
+	local flicker = if kick > 0 then rng:NextNumber(0, 0.6) * kick else 0
+	local lock = smoothProg
+	if wedge and core and endPart then
 		wedge.Enabled = active
+		core.Enabled = active
 		if active then
 			local tip = Vector3.new(nozzle.X + aimDir.X * range, nozzle.Y + aimDir.Y * range, ORIGIN.Z)
 			endPart.CFrame = CFrame.new(tip)
-			wedge.Width1 = 2 * range * math.tan(B.halfAngle)
+			local fullW = 2 * range * math.tan(B.halfAngle)
+			local pulse = 0.06 * math.sin(t * 9)
+			wedge.Width1 = fullW * (1 + 0.25 * kick)
 			wedge.Color = ColorSequence.new(color)
-			local pulse = 0.08 * math.sin(t * 9)
 			wedge.Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.3 + pulse),
-				NumberSequenceKeypoint.new(0.7, 0.72 + pulse),
+				NumberSequenceKeypoint.new(0, math.clamp(0.35 - 0.2 * lock + pulse + flicker, 0, 1)),
+				NumberSequenceKeypoint.new(0.75, math.clamp(0.8 - 0.2 * lock + pulse + flicker * 0.5, 0, 1)),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			-- core: narrow wedge, wider and brighter as the pull locks in
+			core.Width0 = 0.4 + 0.5 * lock
+			core.Width1 = fullW * (0.12 + 0.2 * lock)
+			core.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.35 + 0.4 * lock))
+			core.TextureSpeed = 2 + 8 * lock
+			core.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, math.clamp(0.15 - 0.1 * lock + flicker, 0, 1)),
+				NumberSequenceKeypoint.new(0.8, math.clamp(0.7 - 0.3 * lock + flicker, 0, 1)),
 				NumberSequenceKeypoint.new(1, 1),
 			})
 		end
 	end
-	if tether and tetherPart and tag and tagFill and tagLabel then
+	if tether and tetherCore and tetherPart and tag and tagFill and tagLabel and flow then
 		local show = best ~= nil
 		tether.Enabled = show
+		tetherCore.Enabled = show
 		tag.Enabled = show
+		flow.Enabled = show
 		if best then
-			tetherPart.CFrame = CFrame.new(ORIGIN.X + best.x, ORIGIN.Y + best.y, ORIGIN.Z)
+			local target = Vector3.new(ORIGIN.X + best.x, ORIGIN.Y + best.y, ORIGIN.Z)
+			local toNozzle = nozzle - target
+			local dist = toNozzle.Magnitude
+			if dist > 0.05 then
+				tetherPart.CFrame = CFrame.lookAt(target, nozzle)
+				flow.Speed = NumberRange.new(dist / 0.5)
+				flow.Rate = 10 + 40 * lock
+			else
+				tetherPart.CFrame = CFrame.new(target)
+				flow.Rate = 0
+			end
+			local amp = (1 + 1.5 * lock) * (1 + 2 * kick)
+			local speed = 1 + 1.2 * lock
 			tether.Color = ColorSequence.new(color)
-			tether.CurveSize0 = math.sin(t * 17) * 1.2
-			tether.CurveSize1 = math.cos(t * 13) * 1.2
-			tagFill.Size = UDim2.fromScale(math.clamp(best.progress, 0, 1), 1)
+			tether.Width0 = 0.5 + 0.4 * lock
+			tether.Width1 = 1.6 + 0.8 * lock
+			tether.Transparency = NumberSequence.new(math.clamp(0.35 - 0.25 * lock + flicker, 0, 1))
+			tether.CurveSize0 = math.sin(t * 17 * speed) * 1.2 * amp
+			tether.CurveSize1 = math.cos(t * 13 * speed) * 1.2 * amp
+			tetherCore.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.5 + 0.3 * lock))
+			tetherCore.Width0 = 0.2 + 0.2 * lock
+			tetherCore.Width1 = 0.7 + 0.5 * lock
+			tetherCore.TextureSpeed = 3 + 9 * lock
+			tetherCore.Transparency = NumberSequence.new(math.clamp(0.1 + flicker, 0, 1))
+			tetherCore.CurveSize0 = tether.CurveSize0
+			tetherCore.CurveSize1 = tether.CurveSize1
+			tagFill.Size = UDim2.fromScale(prog, 1)
 			tagFill.BackgroundColor3 = color
 			tagLabel.Text = best.def.name
 			tagLabel.TextColor3 = color:Lerp(Color3.new(1, 1, 1), 0.35)
 		end
 	end
+	if flashPart then
+		flashPart.CFrame = CFrame.new(nozzle)
+	end
 	if nozzleLight then
-		nozzleLight.Color = color
-		nozzleLight.Brightness = if active then 2.5 else 0
+		nozzleLight.Color = if flashT > 0 then Color3.new(1, 1, 1) else color
+		nozzleLight.Brightness = (if active then 2.5 + 2 * lock else 0) + flashT / FLASH_TIME * 6
 	end
 	return active
 end
