@@ -104,7 +104,7 @@ end
 ----------------------------------------------------------------------------
 -- device
 ----------------------------------------------------------------------------
-function InputController.device(): string
+local function computeDevice(): string
 	local ok, pref = pcall(function()
 		return (UserInputService :: any).PreferredInput
 	end)
@@ -116,6 +116,19 @@ function InputController.device(): string
 	if UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled then return "touch" end
 	if UserInputService.GamepadEnabled and not UserInputService.MouseEnabled then return "gamepad" end
 	return "mouse"
+end
+
+local cachedDevice: string? = nil
+
+local function refreshDevice(): string
+	local d = computeDevice()
+	cachedDevice = d
+	return d
+end
+
+-- Cached: refreshed on PreferredInput / LastInputType changes (see init).
+function InputController.device(): string
+	return cachedDevice or refreshDevice()
 end
 
 ----------------------------------------------------------------------------
@@ -206,10 +219,19 @@ function InputController.init()
 
 	pcall(function()
 		UserInputService:GetPropertyChangedSignal("PreferredInput"):Connect(function()
+			refreshDevice()
 			InputController.setMode(mode) -- re-evaluate touch stick visibility
 			InputController.DeviceChanged:Fire(InputController.device())
 		end)
 	end)
+	UserInputService.LastInputTypeChanged:Connect(function()
+		local old = cachedDevice
+		if refreshDevice() ~= old then
+			InputController.setMode(mode)
+			InputController.DeviceChanged:Fire(cachedDevice)
+		end
+	end)
+	refreshDevice()
 end
 
 return InputController
