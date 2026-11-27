@@ -39,6 +39,24 @@ return {
 		batteryDrainMult = 1.6,
 		swarmMultiPull = 3, -- max creatures of one swarm pulled at once
 	},
+	-- Epic creatures blink away while being pulled (Shared/EpicBlink). Deterministic per
+	-- run seed + spawn id; the server adds the lost progress + re-grab delays to the
+	-- minimum catch time.
+	epicBlink = {
+		rarity = "Epic", -- rarity id that blinks
+		minBlinks = 1,
+		maxBlinks = 2,
+		thresholds = { 0.35, 0.7 }, -- pull progress that triggers blink 1, 2, ... (one per blink)
+		minDistance = 11, -- studs from the drone to the blink spot
+		maxDistance = 17,
+		sideJitter = 0.35, -- rad of random spread around behind / left / right
+		keepProgress = 0.1, -- progress left after a blink
+		regrabDelay = 0.6, -- seconds it can't be beamed after a blink
+		vanishTime = 0.12, -- shrink-out at the old spot (inside regrabDelay)
+		appearTime = 0.28, -- pop-in at the new spot (inside regrabDelay)
+		edgeMargin = 4, -- keep the spot this far inside the flight band / zone band
+		minTimeFactor = 0.85, -- server: accept catches >= this x the ideal minimum (lag slack)
+	},
 	scanner = {
 		-- true = Hidden creatures stay invisible and unbeamable until the scanner reveals them
 		-- (CreatureSimClient.reveal). Off until the scanner ships, so they stay catchable.
