@@ -28,6 +28,9 @@ local CatchEvents = require(script.Parent.CatchEvents)
 local AUTO_CLOSE = 4 -- seconds a card stays up without a tap
 local TAP_GRACE = 0.4 -- ignore taps right after the card appears (no accidental skips)
 local SPIN_SPEED = 0.9 -- rad/s
+local FILL_HEIGHT = 0.66 -- creature fills ~2/3 of the viewport height
+local FILL_WIDTH = 0.9 -- ...unless that would clip it sideways while it spins
+local EDGE_CLEAR = 76 -- px kept free above and below the card (Recall button: 16 + 46 from the bottom)
 
 local C = {
 	panel = Color3.fromRGB(11, 18, 32), -- #0B1220
@@ -146,7 +149,8 @@ local function cloneCreature(info: CatchEvents.CatchInfo): Model?
 end
 
 -- Puts the creature in the viewport and spins it. Returns nothing; all cleanup goes to trove.
-local function fillViewport(vp: ViewportFrame, info: CatchEvents.CatchInfo, trove: any)
+-- aspect = viewport width / height
+local function fillViewport(vp: ViewportFrame, info: CatchEvents.CatchInfo, trove: any, aspect: number)
 	local m = cloneCreature(info)
 	if not m then return end
 	trove:Add(m)
@@ -157,8 +161,13 @@ local function fillViewport(vp: ViewportFrame, info: CatchEvents.CatchInfo, trov
 	local box, size = m:GetBoundingBox()
 	local centre = box.Position -- spin around the model's visual centre
 	local radius = math.max(size.Magnitude / 2, 0.5)
-	local dist = radius / math.sin(math.rad(cam.FieldOfView / 2)) * 1.05
-	cam.CFrame = CFrame.lookAt(Vector3.new(0, radius * 0.35, dist), Vector3.zero)
+	-- fit by the real extents: height to FILL_HEIGHT, the spinning footprint (X/Z diagonal) to FILL_WIDTH
+	local tanHalf = math.tan(math.rad(cam.FieldOfView / 2))
+	local halfY = math.max(size.Y / 2, 0.25)
+	local halfXZ = math.max(math.sqrt(size.X * size.X + size.Z * size.Z) / 2, 0.25)
+	-- small extra distance: the near side of the spinning model is closer than its centre
+	local dist = math.max(halfY / (FILL_HEIGHT * tanHalf), halfXZ / (FILL_WIDTH * tanHalf * aspect)) + halfXZ * 0.3
+	cam.CFrame = CFrame.lookAt(Vector3.new(0, dist * 0.1, dist), Vector3.zero)
 	m.Parent = vp
 
 	local t0 = os.clock()
@@ -211,23 +220,24 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 		local cam = workspace.CurrentCamera
 		if not cam then return end
 		local v = cam.ViewportSize
-		-- never taller than ~88% of the screen
-		local fit = (v.Y * 0.88) / (h + 40)
-		uiScale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 720, fit), 0.55, 1.35)
+		-- vertically centred, so keep EDGE_CLEAR free top and bottom (clear of the Recall button)
+		local fit = (v.Y - 2 * EDGE_CLEAR) / (h + 40)
+		uiScale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 720, fit), 0.5, 1.35)
 	end
 	rescale()
 	if workspace.CurrentCamera then
 		trove:Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), rescale)
 	end
 
-	local shown = UDim2.fromScale(0.5, 0.47)
-	local hidden = UDim2.new(0.5, 0, 1, h)
+	-- right side, vertically centred: the flight camera centres the drone, so the middle stays free
+	local shown = UDim2.new(0.97, 0, 0.5, 0)
+	local hidden = UDim2.new(1, w + 60, 0.5, 0) -- off the right edge (incl. the T5 halo); slides in from the right
 
 	-- holder slides; the glow (T5) sits behind the card inside it
 	local holder = make("Frame", {
 		Name = "Holder",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(0.5, 0.5),
+		AnchorPoint = Vector2.new(1, 0.5),
 		Position = hidden,
 		Size = UDim2.fromOffset(w, h),
 		Parent = gui,
@@ -240,7 +250,7 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 		Size = UDim2.fromScale(1, 1),
 		ZIndex = 2,
 		BackgroundColor3 = C.panel,
-		BackgroundTransparency = 0.2,
+		BackgroundTransparency = 0.03, -- nearly opaque: the world must not show through
 		BorderSizePixel = 0,
 		Selectable = true,
 		Parent = holder,
@@ -321,32 +331,38 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 		}),
 	})
 
-	-- creature viewport on a rarity-tinted backdrop
+	-- creature viewport on a solid, dark rarity-tinted backdrop (opaque: nothing from the world behind)
 	local vpSize = if big then 222 else 190
-	local vp: ViewportFrame = make("ViewportFrame", {
-		Name = "Creature",
+	local vpWidth = vpSize + 40
+	local backdrop = make("Frame", {
+		Name = "Backdrop",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 42),
-		Size = UDim2.fromOffset(vpSize + 40, vpSize),
-		BackgroundColor3 = c1,
-		BackgroundTransparency = 0.82,
-		Ambient = Color3.fromRGB(175, 180, 200),
-		LightColor = Color3.fromRGB(255, 250, 240),
-		LightDirection = Vector3.new(-1, -1.4, -1),
+		Size = UDim2.fromOffset(vpWidth, vpSize),
+		BackgroundColor3 = Color3.new(1, 1, 1), -- the gradient below gives the colour
+		BackgroundTransparency = 0,
 		BorderSizePixel = 0,
 		ZIndex = 2,
 		Parent = card,
 	}, {
 		corner(8),
 		make("UIGradient", {
-			Transparency = NumberSequence.new({
-				NumberSequenceKeypoint.new(0, 0.2),
-				NumberSequenceKeypoint.new(1, 0.85),
-			}),
+			Color = ColorSequence.new(c1:Lerp(C.panel, 0.55), c1:Lerp(C.panel, 0.85)),
 			Rotation = 90,
 		}),
 	})
-	fillViewport(vp, info, trove)
+	local vp: ViewportFrame = make("ViewportFrame", {
+		Name = "Creature",
+		Size = UDim2.fromScale(1, 1),
+		BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(200, 205, 220),
+		LightColor = Color3.fromRGB(255, 255, 250),
+		LightDirection = Vector3.new(-1, -1.4, -1),
+		BorderSizePixel = 0,
+		ZIndex = 3,
+		Parent = backdrop,
+	})
+	fillViewport(vp, info, trove, vpWidth / vpSize)
 
 	-- name + rarity
 	local y = 42 + vpSize + 8
