@@ -19,14 +19,14 @@ export type Tier = {
 	sound: string?,
 }
 
--- T3+ keep the toast until the Catch Card ships; the celebration issue turns it off then.
+-- T3+ show the Catch Card instead of the toast (card = true, toast = false).
 local tiers: { [number]: Tier } = {
 	[0] = { toast = true, big = false, shake = 0.06, flash = 0, slowmo = nil, card = false, sound = nil },
 	[1] = { toast = true, big = false, shake = 0.1, flash = 0, slowmo = nil, card = false, sound = nil },
 	[2] = { toast = true, big = false, shake = 0.2, flash = 0.15, slowmo = nil, card = false, sound = nil },
-	[3] = { toast = true, big = true, shake = 0.35, flash = 0.3, slowmo = nil, card = true, sound = nil },
-	[4] = { toast = true, big = true, shake = 0.45, flash = 0.5, slowmo = { scale = 0.25, seconds = 0.4 }, card = true, sound = nil },
-	[5] = { toast = true, big = true, shake = 0.6, flash = 0.7, slowmo = { scale = 0.2, seconds = 0.8 }, card = true, sound = nil },
+	[3] = { toast = false, big = true, shake = 0.35, flash = 0.3, slowmo = nil, card = true, sound = nil },
+	[4] = { toast = false, big = true, shake = 0.45, flash = 0.5, slowmo = { scale = 0.25, seconds = 0.4 }, card = true, sound = nil },
+	[5] = { toast = false, big = true, shake = 0.6, flash = 0.7, slowmo = { scale = 0.2, seconds = 0.8 }, card = true, sound = nil },
 }
 
 local Celebrations = {}

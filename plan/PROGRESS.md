@@ -49,17 +49,21 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [x] Catch contract (#21): `CatchEvents` (Caught / Landed / CardRequested / CardClosed), `Config/Celebrations`, `TimeScale`, Studio test hook `ReplicatedStorage.DevHooks.FakeCatch:Fire(<rarity>, {mods}, size)`.
 - [x] Beam VFX (#22 → PR #25): rarity-tinted glow + bright core, intensity by pull progress, energy tether with flowing particles, struggle flicker, catch-snap flash, creature lean/wobble.
 - [x] Catch animation (#27 → PR #34): corkscrew pull along the beam, squash & stretch, intake flash, drone gulp-hop; `Landed` fires once per catch.
-- [x] Celebrations T0–T5 (#28 → PR #35): bursts, rings, light pulses, screen flash, edge glow, golden rays, T5 colour grade + particle storm; slow-mo via `TimeScale`. T3+ still show the toast until the Catch Card ships.
+- [x] Celebrations T0–T5 (#28 → PR #35): bursts, rings, light pulses, screen flash, edge glow, golden rays, T5 colour grade + particle storm; slow-mo via `TimeScale`. T3+ show the Catch Card instead of the toast.
 - [x] Drone polish (#31 → PR #37): white outline, thruster glow/trail by speed, red/green blinking nav lights, rotor spin-up on deploy.
 - [x] Earth redraw (#30 → PR #36), see above.
-- [~] Mission Control HUD (#24 → PR #38, Çağan/Gemini): waiting for the lead's Studio check.
-- [ ] Catch Card (#23, Kosmint/Gemini): not started yet (Kosmint's Gemini runner off).
-- [ ] Scanner (#29, Çağan/Gemini): after the HUD.
-- [ ] Mobile check (#32, lead): last.
+- [x] Mission Control HUD (#24 → PR #38, Çağan/Gemini): dark panels + cyan accents, battery states, hull pips, altimeter with zone bands + engine limit, cargo bay with pop, `warning(text, level)` banner, restyled toasts/base/results. Phone: touch targets ≥ 44 px, labels ≥ 10 px.
+- [x] Catch Card (#23 → PR #41, Kosmint/Claude): spinning creature viewport, rarity gradient, modifier/size chips, T4 shine, T5 big card + glow, queue, 4 s auto-close; right side on PC, top-right on touch (clear of BEAM/RECALL).
+- [x] Epic blink (#43 → PR #44, from Kosta's playtest): Epics teleport behind/left/right of the drone 1–2 times while pulled; deterministic from the run seed (`Shared/EpicBlink`), server minimum catch time updated, tunables in `Balance.epicBlink`.
+- [x] Earth sinks as you climb (#42 → PR #46, bug from Kosta's playtest): bottom third at Edge of Space entry → bottom fifth at 600 studs (`SkyArt.earth` fill/scale).
+- [ ] Scanner (#29, Çağan/Gemini): assigned 2026-11-27.
+- [ ] HUD polish: "MAX LIMIT" tag overlaps "Edge of Space" at the top engine level (#47, Kosmint/Gemini).
+- [ ] Mobile check of everything (#32, lead): after the scanner.
+- [ ] Stage 2 gate: screenshots + summary, 2 of the 3 humans approve; then delete `ServerStorage.OldScenery`.
 - Open questions for the humans: drone size (~11% of the screen height; bigger = more readable, but moves the beam nozzle); T5 pink screen and disc-looking rings (#35) to judge while playing.
 - Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
 - [x] Rojo live-sync on (#12): Rojo 7.7.1 (`rokit.toml`), plugin 7.7.1, `servePlaceIds` locked to this place, `.luau` at LF. First connect changed nothing (33 scripts hash-identical before and after). From now on `src/` is the source of truth; only the lead syncs (see `AGENTS.md`).
-**Last session:** 2026-11-27 — overnight lead loop: PRs #25 #33 #34 #35 #36 #37 merged and tested together on `main` in Studio (place version 53); HUD PR #38 in review.
+**Last session:** 2026-11-27 (evening) — PRs #38 HUD, #41 Catch Card, #44 Epic blink, #46 Earth fix merged after Studio tests on PC + phone (Device Simulator); T3+ toast off; rule: only the lead edits PROGRESS (#45).
 
 ## Stage 1 checklist
 - [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
@@ -171,7 +175,6 @@ Demo units ≈ studs at 1:1 to start, retune to Roblox scale if needed.
 
 ## Placeholders to replace (track greybox here)
 - All 12 creatures use one tinted Cloud Puff model (`Assets.Creatures.Placeholder`) → final models **Stage 6** (`Assets.Creatures.<Id>` is picked up automatically).
-- Catch Card is a skeleton that closes at once (`CatchCardController`) → real card **Stage 2** (#23).
 - Celebration sounds are empty slots (`Config/Celebrations`) → **Stage 3** audio.
 - HUD is temporary → final Mission Control HUD **Stage 2**.
 - Launch = fade to the sky (no rocket) → rocket + launch sequence **Stage 4**. Return = short dive + fade → re-entry **Stage 3**.
