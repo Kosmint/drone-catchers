@@ -8,7 +8,7 @@
 -- T4 slow-mo + golden rays + flash | T5 slow-mo + color-grade shift + particle storm.
 -- World VFX are short-lived parts (Debris). Screen VFX use one ScreenGui and one
 -- ColorCorrectionEffect created once and reused; Lighting is restored after every effect
--- (overlapping catches use a generation counter) and on run end / CardClosed.
+-- (overlapping catches use a generation counter) and on run end.
 
 local Debris = game:GetService("Debris")
 local Lighting = game:GetService("Lighting")
@@ -25,6 +25,7 @@ local CatchEvents = require(Controllers.CatchEvents)
 local CameraController = require(Controllers.CameraController)
 local HUDController = require(Controllers.HUDController)
 local TimeScale = require(Controllers.TimeScale)
+local FlightController = require(Controllers.FlightController)
 
 local SPARK_TEX = "rbxasset://textures/particles/sparkles_main.dds"
 local rng = Random.new()
@@ -119,7 +120,7 @@ local function screenFlash(color: Color3, strength: number, seconds: number)
 	ensureScreen()
 	local f = flashFrame :: Frame
 	f.BackgroundColor3 = color
-	f.BackgroundTransparency = 1 - math.clamp(strength, 0, 1) * 0.85
+	f.BackgroundTransparency = 1 - math.clamp(strength * 0.6, 0, 1) * 0.85
 	TweenService:Create(f, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { BackgroundTransparency = 1 }):Play()
 end
 
@@ -171,10 +172,10 @@ local function lightRays(worldPos: Vector3, color: Color3, seconds: number)
 		ray.BackgroundColor3 = color
 		ray.BorderSizePixel = 0
 		ray.AnchorPoint = Vector2.new(0.5, 1)
-		ray.Size = UDim2.fromOffset(34, 1400)
+		ray.Size = UDim2.fromOffset(20, 1400)
 		ray.Rotation = (i - 1) * (360 / count)
 		ray.Position = UDim2.fromOffset(0, 0)
-		ray.BackgroundTransparency = 0.55
+		ray.BackgroundTransparency = 0.7
 		ray.Parent = holder
 		local grad = Instance.new("UIGradient")
 		grad.Rotation = 90
@@ -182,7 +183,7 @@ local function lightRays(worldPos: Vector3, color: Color3, seconds: number)
 		grad.Parent = ray
 		-- rays are thin wedges: scale width up to feel like beams
 		TweenService:Create(ray, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Size = UDim2.fromOffset(110, 1400), BackgroundTransparency = 1,
+			Size = UDim2.fromOffset(60, 1400), BackgroundTransparency = 1,
 		}):Play()
 	end
 	TweenService:Create(holder, TweenInfo.new(seconds, Enum.EasingStyle.Linear), { Rotation = 40 }):Play()
@@ -245,7 +246,7 @@ local function ring(pos: Vector3, color: Color3, startSize: number, endSize: num
 	p.CastShadow = false
 	p.Material = Enum.Material.Neon
 	p.Color = color
-	p.Transparency = 0.15
+	p.Transparency = 0.4
 	-- cylinder axis is X; rotate so its flat face looks along Z
 	p.Size = Vector3.new(0.2, startSize, startSize)
 	p.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(90), 0)
@@ -269,8 +270,8 @@ end
 -- Continuous storm of sparks around the drone for T5.
 local function particleStorm(pos: Vector3, c1: Color3, c2: Color3, seconds: number)
 	local _, a = anchorPart(pos, seconds + 2)
-	local e = emitter(a, ColorSequence.new(c1, c2), NumberRange.new(14, 40), 1.6, 1.6, 180)
-	e.Rate = 140
+	local e = emitter(a, ColorSequence.new(c1, c2), NumberRange.new(14, 40), 0.8, 1.6, 180)
+	e.Rate = 70
 	e.Enabled = true
 	e.Acceleration = Vector3.new(0, 6, 0)
 	task.delay(seconds, function()
@@ -290,29 +291,29 @@ local GOLD = Color3.fromRGB(255, 205, 80)
 
 local function playWorld(tierN: number, pos: Vector3, c1: Color3, c2: Color3)
 	if tierN == 0 then
-		burst(pos, c1, c1, 8, 14, 0.9, 0.5)
+		burst(pos, c1, c1, 8, 14, 0.45, 0.5)
 	elseif tierN == 1 then
-		burst(pos, c1, c2, 14, 18, 1.1, 0.7)
-		burst(pos, Color3.new(1, 1, 1), lighten(c1, 0.5), 10, 22, 0.7, 0.9)
+		burst(pos, c1, c2, 14, 18, 0.55, 0.7)
+		burst(pos, Color3.new(1, 1, 1), lighten(c1, 0.5), 10, 22, 0.35, 0.9)
 	elseif tierN == 2 then
-		burst(pos, c1, c2, 22, 24, 1.3, 0.8)
-		ring(pos, c1, 2, 16, 0.55)
+		burst(pos, c1, c2, 22, 24, 0.65, 0.8)
+		ring(pos, c1, 1.5, 8, 0.55)
 		lightPulse(pos, c1, 6, 0.4)
 	elseif tierN == 3 then
-		burst(pos, c1, c2, 36, 30, 1.5, 0.9)
-		ring(pos, c1, 2, 20, 0.6)
-		ring(pos, c2, 1, 28, 0.8)
+		burst(pos, c1, c2, 36, 30, 0.75, 0.9)
+		ring(pos, c1, 1.5, 10, 0.6)
+		ring(pos, c2, 1, 12, 0.8)
 		lightPulse(pos, c1, 8, 0.5)
 	elseif tierN == 4 then
-		burst(pos, GOLD, c2, 50, 34, 1.7, 1.1)
-		ring(pos, c1, 2, 24, 0.7)
-		ring(pos, GOLD, 1, 36, 1.0)
+		burst(pos, GOLD, c2, 50, 34, 0.85, 1.1)
+		ring(pos, c1, 1.5, 10, 0.7)
+		ring(pos, GOLD, 1, 12, 1.0)
 		lightPulse(pos, GOLD, 10, 0.8)
 	else
-		burst(pos, c1, c2, 70, 40, 2, 1.3)
-		ring(pos, c1, 2, 28, 0.8)
-		ring(pos, c2, 1.5, 40, 1.1)
-		ring(pos, Color3.new(1, 1, 1), 1, 52, 1.4)
+		burst(pos, c1, c2, 70, 40, 1, 1.3)
+		ring(pos, c1, 1.5, 12, 0.8)
+		ring(pos, c2, 1.5, 15, 1.1)
+		ring(pos, Color3.new(1, 1, 1), 1, 18, 1.4)
 		lightPulse(pos, c1, 12, 1.0)
 		particleStorm(pos, c1, c2, 2.2)
 	end
@@ -321,7 +322,8 @@ end
 local function celebrate(info: CatchEvents.CatchInfo)
 	local tier = Celebrations.forTier(info.rarity.tier)
 	local tierN = math.clamp(info.rarity.tier, 0, Celebrations.MAX_TIER)
-	local pos = info.worldPos
+	-- real catches play at the nozzle (the creature is already pulled in); tests at worldPos
+	local pos = if info.isTest then info.worldPos else FlightController.nozzleWorld()
 	local c1 = info.rarity.color
 	local c2 = info.rarity.color2 or lighten(c1, 0.45)
 
@@ -378,9 +380,8 @@ end
 
 function CelebrationController.init()
 	CatchEvents.Landed:Connect(celebrate)
-	-- a dismissed card ends the long screen effects early
+	-- effects end on their own timers; a closed card only clears the marker
 	CatchEvents.CardClosed:Connect(function(info: CatchEvents.CatchInfo)
-		if lastCardTier >= 5 then resetScreen() end
 		lastCardTier = -1
 	end)
 	-- run end / leaving flight: never leave tinted lighting behind
