@@ -23,7 +23,7 @@ User: scrap the painted sky, the 3D clouds and the whole Storm Layer; copy the a
 - [x] Deviation from the demo: depth-1 clouds sit 1 stud *behind* the drone plane (in the demo they could hide the drone).
 - [x] StormController deleted. Old scenery (painted sky, Clouds3D, Storm3D, SkyFX) parked in `ServerStorage.OldScenery` (`*_scrapped2`) — delete after the user approves the new look.
 - [ ] User approval of the demo-style sky (screenshots: deploy / Sunset Heights / Edge of Space).
-- [x] Earth redrawn (#30): faceted low-poly globe (ocean, original continents, polar ice, cloud streaks) in 2 tiles of 990×607 px instead of the demo wedges; colours pre-toned for the Edge of Space colour correction. **Needs the humans' OK (style change vs. the demo).** Ground hills/base from the demo not ported (user earlier: no green ground).
+- [x] Earth redrawn (#30): faceted low-poly globe (ocean, original continents, polar ice, cloud streaks) in 2 tiles of 990×607 px instead of the demo wedges; colours pre-toned for the Edge of Space colour correction. Merged 2026-11-27 (muhammet842); confirm at the Stage 2 gate. Ground hills/base from the demo not ported (user earlier: no green ground).
 
 ## Stage 2 checklist (older items below the reset are superseded where they mention painted/3D clouds or the Storm Layer)
 - [x] Creatures move in 3D: yaw follows travel (turns through a 3/4 view toward the camera), pitch up/down with climb/sink, bank into turns, strain away from the drone while beamed.
@@ -45,14 +45,21 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [ ] Edge of Space painted set (deep gradient, curved atmosphere glow line, cloud deck far below) — currently plain dark sky + stars
 - [ ] Sun glow / lens flare overlay; painted floating clouds near the action plane; painted-layer transitions between zones
 - [ ] 3D low-poly Earth curve at Edge of Space (may become part of the painted Edge set)
-- [ ] Final Mission Control HUD (user: current one "AI-ish and simple")
-- [~] Beam VFX (#22, PR open, needs Studio check); catch animation (squash/stretch, intake flash), celebration tiers T0–T5 + Catch Card
-- [ ] Scanner ("?" edge blips, Hidden reveal)
-- [ ] Drone polish (thruster glow, lights, deploy anim)
-- [ ] Mobile HUD check (Device Simulator)
+### Stage 2 — catch presentation + polish (2026-11-27, through helper Issues; contract #21)
+- [x] Catch contract (#21): `CatchEvents` (Caught / Landed / CardRequested / CardClosed), `Config/Celebrations`, `TimeScale`, Studio test hook `ReplicatedStorage.DevHooks.FakeCatch:Fire(<rarity>, {mods}, size)`.
+- [x] Beam VFX (#22 → PR #25): rarity-tinted glow + bright core, intensity by pull progress, energy tether with flowing particles, struggle flicker, catch-snap flash, creature lean/wobble.
+- [x] Catch animation (#27 → PR #34): corkscrew pull along the beam, squash & stretch, intake flash, drone gulp-hop; `Landed` fires once per catch.
+- [x] Celebrations T0–T5 (#28 → PR #35): bursts, rings, light pulses, screen flash, edge glow, golden rays, T5 colour grade + particle storm; slow-mo via `TimeScale`. T3+ still show the toast until the Catch Card ships.
+- [x] Drone polish (#31 → PR #37): white outline, thruster glow/trail by speed, red/green blinking nav lights, rotor spin-up on deploy.
+- [x] Earth redraw (#30 → PR #36), see above.
+- [~] Mission Control HUD (#24 → PR #38, Çağan/Gemini): waiting for the lead's Studio check.
+- [ ] Catch Card (#23, Kosmint/Gemini): not started yet (Kosmint's Gemini runner off).
+- [ ] Scanner (#29, Çağan/Gemini): after the HUD.
+- [ ] Mobile check (#32, lead): last.
+- Open questions for the humans: drone size (~11% of the screen height; bigger = more readable, but moves the beam nozzle); T5 pink screen and disc-looking rings (#35) to judge while playing.
 - Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
 - [x] Rojo live-sync on (#12): Rojo 7.7.1 (`rokit.toml`), plugin 7.7.1, `servePlaceIds` locked to this place, `.luau` at LF. First connect changed nothing (33 scripts hash-identical before and after). From now on `src/` is the source of truth; only the lead syncs (see `AGENTS.md`).
-**Last session:** 2026-11-26 — automation tested (cloud Claude + local Gemini), Rojo turned on, place saved before connecting (Roblox version 38).
+**Last session:** 2026-11-27 — overnight lead loop: PRs #25 #33 #34 #35 #36 #37 merged and tested together on `main` in Studio (place version 53); HUD PR #38 in review.
 
 ## Stage 1 checklist
 - [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
@@ -164,10 +171,8 @@ Demo units ≈ studs at 1:1 to start, retune to Roblox scale if needed.
 
 ## Placeholders to replace (track greybox here)
 - All 12 creatures use one tinted Cloud Puff model (`Assets.Creatures.Placeholder`) → final models **Stage 6** (`Assets.Creatures.<Id>` is picked up automatically).
-- FlightSpace scenery (`FlightSpace.Chapter1`: flat meadow tiles, ball hills, CloudMesh layers) → real zone layers, Earth curve, horizon **Stage 2**.
-- Zone lighting is basic (`Config/ZoneLighting`) → full presets **Stage 2**.
-- Beam = flat light wedge + tether (low contrast over white clouds) → real beam VFX **Stage 2**.
-- Catch = spiral intake + toast → celebration tiers + Catch Card **Stage 2**.
+- Catch Card is a skeleton that closes at once (`CatchCardController`) → real card **Stage 2** (#23).
+- Celebration sounds are empty slots (`Config/Celebrations`) → **Stage 3** audio.
 - HUD is temporary → final Mission Control HUD **Stage 2**.
 - Launch = fade to the sky (no rocket) → rocket + launch sequence **Stage 4**. Return = short dive + fade → re-entry **Stage 3**.
 - `Workspace.StyleTest` reference scene still sits above the spawn (visible from the base) → remove/move when the base is built (**Stage 5**).
