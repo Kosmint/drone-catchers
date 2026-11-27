@@ -5,7 +5,7 @@ Each stage ends at a **Gate**. A gate passes only when ALL are true:
 2. Playtested in Studio (`start_stop_play`), console has **no errors/warnings from our code**.
 3. Screenshots (`screen_capture`, `video_capture` for motion) of key moments, judged against the quality bar (`03_ART_AND_AUDIO.md` §1).
 4. Works on PC + mobile emulation (from Stage 2 on).
-5. Summary + screenshots shown to the user, **user approves**.
+5. Summary + screenshots in a gate Issue; **at least 2 of the 3 humans approve** (see `AGENTS.md`).
 6. Place saved + backup in `backups/`.
 
 Estimates are guides, not targets. Total ≈ **2.5–3.5 weeks** of focused work. Never rush a gate.
@@ -46,17 +46,22 @@ Estimates are guides, not targets. Total ≈ **2.5–3.5 weeks** of focused work
 - [ ] Battery, cargo, Recall, basic return; temporary HUD.
 **Gate:** user plays and it feels good. Greybox allowed only here.
 
-## Stage 2 — Flight Visuals Ch1 + Catch Presentation (≈2 days)
-- [ ] Zone presets 1.1/1.2/1.3 (Atmosphere, Sky, ColorCorrection, Bloom, SunRays) with smooth blending, Astroneer-inspired pastel low-poly look.
-- [ ] Parallax layers (horizon, cloud banks, storm clouds, aurora, stars) + foreground layers.
-- [ ] 3D low-poly **Earth** at Edge of Space (continents, cloud layer, atmosphere glow).
-- [ ] Drone T1 model (thrusters, lights, tilt, deploy anim).
-- [ ] Beam VFX (rarity-tinted, intensity by progress) + creature stretch/struggle.
-- [ ] Catch animation: spiral pull, squash & stretch, intake flash, drone bounce, cargo pop.
-- [ ] Celebration tiers T0–T5 with distinct VFX/sound/UI; **Catch Card** (ViewportFrame, rarity gradient, modifier tag).
-- [ ] Final flight HUD (Mission Control): altimeter, battery, hull, cargo icons, scanner ring, Recall, warning banner, active potions row (placeholder).
-- [ ] Scanner: "?" edge blips, Hidden reveal.
-**Gate:** every zone screenshot is thumbnail-worthy; catches feel rewarding; mobile HUD checked.
+## Stage 2 — Flight Visuals Ch1 + Catch Presentation (≈2 days → took longer after the sky reset)
+Direction since 2026-11-25: the flight copies the **approved browser demo** (flat low-poly 2D sky). Zones: Low Sky / Sunset Heights / Edge of Space (no Storm Layer). Atmosphere/painted-sky/3D-cloud presets were tried and dropped.
+- [x] Demo sky (`SkyController`, art from `art/demo_sky.py`, ids in `Config/SkyArt`): altitude gradient, sun glow, stars, ringed planet, moon, far mountains, 80 flat clouds at parallax depths; per-zone colour correction (`ZoneLighting`).
+- [ ] Sky works at low graphics quality (phones): sky cards close enough not to be culled; Roblox sun hidden in flight (#51 → PR #53).
+- [x] 2D low-poly **Earth** rising at Edge of Space and sinking as you climb (#30, #42).
+- [x] Drone T1 polish: outline, thruster glow/trail, nav lights, rotor spin-up (#31).
+- [x] Beam VFX (rarity-tinted, intensity by progress, tether, struggle) + creature lean/wobble (#22).
+- [x] Catch animation: corkscrew pull, squash & stretch, intake flash, drone gulp-hop, cargo pop (#27).
+- [x] Celebration tiers T0–T5 (`Config/Celebrations`, `TimeScale` slow-mo) (#28); hollow rings + lighter T5 colour shift (#50 → PR #52).
+- [x] **Catch Card** for T3+ (ViewportFrame, rarity gradient, modifier/size chips, queue) (#23); T3+ show the card instead of the toast. Epic header wording (#55).
+- [x] Epic blink: Epics teleport around the drone while pulled, deterministic, server-checked (#43).
+- [x] Mission Control HUD: battery, hull, altimeter with zone bands + engine limit, cargo bay, Recall, warning banner, results; phone rules (touch ≥ 44 px, labels ≥ 10 px) (#24). MAX LIMIT overlap (#47).
+- [ ] Scanner: range ring, `?` edge blips beyond range, rarity rings, Hidden reveal on screen (#29 → PR #49).
+- [ ] Mobile check of everything in the Device Simulator (#32).
+- Moved out of Stage 2: active potions row on the HUD (Stage 7, PotionService), creature models second pass (Stage 6), hazards + sound (Stage 3).
+**Gate (#54):** every zone screenshot is thumbnail-worthy; catches feel rewarding; HUD and sky checked on PC + phone; then delete `ServerStorage.OldScenery`.
 
 ## Stage 3 — Mood, Hazards Ch1, Return Trip, Soundscape (≈1.5 days)
 - [ ] MoodController (Calm/Tension/Danger/Triumph) + post-processing, shake, vignette, FOV; shake accessibility toggle.
