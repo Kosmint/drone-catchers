@@ -1,2 +1,6 @@
+# Every text file is stored with LF, whatever core.autocrlf says on the PC that commits it.
+# (A helper on Windows once committed plan/PROGRESS.md with CRLF: every line showed as changed.)
+* text=auto eol=lf
+
 # Studio stores scripts with LF line endings; keep the files that Rojo syncs the same.
 *.luau text eol=lf
