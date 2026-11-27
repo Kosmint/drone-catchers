@@ -43,7 +43,7 @@ lead. Anyone else → you are a helper. If unsure, act as a helper.
    approach, or read the Roblox docs. If still blocked, say what is blocked and why in the Issue/PR
    and wait for the lead.
 4. Quality over speed. No scuffed models, no placeholder visuals left behind without being tracked
-   in `plan/PROGRESS.md` ("Placeholders to replace").
+   in `plan/PROGRESS.md` ("Placeholders to replace"; helpers list them in the PR, the lead adds them).
 5. Stage gates need approval from **at least 2 of the 3 humans** (screenshots + summary) before the
    next stage.
 6. **Original content only.** Style inspiration is fine; copying assets, characters or a specific
@@ -58,7 +58,8 @@ lead. Anyone else → you are a helper. If unsure, act as a helper.
 - An agent's PR is merged by a **different human** than the one who runs that agent (e.g. a PR from
   Kosmint's Claude is merged by muhammet842 or Çağan).
 - Don't commit secrets, `.rbxl` place files or `.claude/settings.local.json`.
-- Update `plan/PROGRESS.md` in the same PR when you finish a checklist item.
+- **Only the lead edits `plan/PROGRESS.md`** (one small PR after work merges). Helpers never touch it:
+  parallel PRs that each add a line there conflict with each other.
 
 ## Roblox Studio: one agent at a time
 The live game is in Roblox Studio (Team Create).
@@ -103,8 +104,8 @@ folders in `default.project.json` (`ReplicatedStorage.Shared`, `ServerScriptServ
 - PowerShell 5.1 mangles UTF-8: use .NET `ReadAllText`/`WriteAllText` with UTF-8 (no BOM).
 
 ## End of a work session
-Update `plan/PROGRESS.md`, commit on your branch, open/update the PR, and save the place if you
-changed Studio (the lead: put the synced clone back on `main` first).
+Commit on your branch, open/update the PR, and save the place if you changed Studio. The lead also
+updates `plan/PROGRESS.md` and puts the synced clone back on `main` first.
 
 ## Automation
 Helpers run unattended: assigning an Issue, or a comment or review on it, wakes the right helper.

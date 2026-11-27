@@ -37,8 +37,8 @@ First read everything: `gh issue view <issue> --comments`, and if there is a PR,
    `Closes #<issue>` in the body. Under "Tested in Studio" write:
    `No: <where> helper, the lead tests it in Studio`.
 5. Keep a short progress note on the Issue, updated as you go: `Done: ... / Left: ...`.
-6. When the acceptance checks you can verify without Studio are met: update `plan/PROGRESS.md` if you
-   finished a checklist item, then `gh pr ready <pr>` and comment on the PR:
+6. When the acceptance checks you can verify without Studio are met: `gh pr ready <pr>` and comment on
+   the PR (never edit `plan/PROGRESS.md`; the lead updates it, so parallel PRs don't conflict):
    what changed, **step-by-step how the lead should test it in Studio**, and anything you are unsure of.
 
 ### Trigger `issue-comment`, `pr-comment` or `pr-review-*` (someone answered you)
