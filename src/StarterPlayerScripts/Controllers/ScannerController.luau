@@ -1,11 +1,13 @@
 --!strict
 -- ScannerController: flight scanner (Stage 2, #29, plan/00_GAME_DESIGN.md §4).
---   - Thin Mission Control range ring + gentle sweep pulse around the drone.
+--   - Decorative Mission Control sweep reticle around the drone.
 --   - Rarity rings on revealed creatures inside scanner range.
---   - Neutral "?" edge blips pointing to off-screen creatures within 2x range
---     (max 8, nearest first; avoids HUD panels on desktop and phone).
---   - Reveals Hidden creatures (e.g. Aurora Wisp) when they enter scanner range
---     with a short 3D + 2D shimmer.
+--   - Edge blips pointing to off-screen creatures within 2x range (max 8, nearest
+--     first; rarity-colored dot when inside scanner range, neutral "?" beyond
+--     range; avoids HUD panels and merges overlapping blips with a "×N" count).
+--   - Reveals Hidden creatures (e.g. Aurora Wisp) when they are both inside
+--     scanner range and inside the visible screen (~3 studs from the edge), so
+--     the 3D + 2D reveal shimmer is always seen.
 -- All UI elements and 3D shimmer parts are pooled (no per-frame Instance.new)
 -- and cleaned up automatically when the flight HUD hides at run end.
 
@@ -13,19 +15,26 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Balance = require(Shared.Config.Balance)
+local Upgrades = require(Shared.Config.Upgrades)
 local CreatureSimClient = require(script.Parent.CreatureSimClient)
+local FlightController = require(script.Parent.FlightController)
 local HUDController = require(script.Parent.HUDController)
 local InputController = require(script.Parent.InputController)
 
 local ORIGIN = Balance.flight.origin
+local VIEW_HEIGHT = Balance.flight.viewHeight
+local DEFAULT_SCANNER_RANGE = Upgrades.drone.scanner.value(1)
 local SPARKLE_TEX = "rbxasset://textures/particles/sparkles_main.dds"
 
 local MAX_BLIPS = 8
+local MAX_CANDIDATES = 24
 local MAX_RARITY_RINGS = 28
 local MAX_SHIMMER_UI = 6
 local MAX_SHIMMER_3D = 4
+local MAX_AVOID_RECTS = 6
 local SHIMMER_TIME = 0.45
 local SWEEP_PERIOD = 2.8
+local REVEAL_EDGE_STUDS = 3 -- Hidden creatures reveal only once this far inside the screen
 
 local C_CYAN = Color3.fromRGB(57, 213, 255)
 local C_PANEL = Color3.fromRGB(11, 18, 32)
@@ -33,13 +42,22 @@ local C_NEUTRAL = Color3.fromRGB(214, 226, 244)
 local C_NEUTRAL_DIM = Color3.fromRGB(142, 164, 200)
 local FONT = Enum.Font.GothamBold
 
+local AVOID_PANEL_NAMES = { "Status", "Altimeter", "CargoBay", "Recall", "Beam" }
+
 local ScannerController = {}
+
+type RunInfo = {
+	runId: any,
+	stats: { scanner: number? }?,
+}
 
 type BlipUI = {
 	root: Frame,
 	bg: Frame,
 	stroke: UIStroke,
 	label: TextLabel,
+	dot: Frame,
+	countLabel: TextLabel,
 	arrowHolder: Frame,
 	armTop: Frame,
 	armBot: Frame,
@@ -70,6 +88,26 @@ type BlipSlot = {
 	dist: number,
 	lx: number,
 	ly: number,
+	inRange: boolean,
+	color: Color3,
+}
+
+type PlacedBlip = {
+	bx: number,
+	by: number,
+	lx: number,
+	ly: number,
+	dist: number,
+	inRange: boolean,
+	color: Color3,
+	count: number,
+}
+
+type Rect = {
+	x1: number,
+	y1: number,
+	x2: number,
+	y2: number,
 }
 
 local layer: Frame? = nil
@@ -81,14 +119,26 @@ local blips: { BlipUI } = {}
 local rarityRings: { RarityRingUI } = {}
 local shimmerUIs: { ShimmerUI } = {}
 local shimmer3Ds: { Shimmer3D } = {}
+local avoidPanels: { GuiObject } = {}
 local fxFolder: Folder? = nil
 local nextShimmerUI = 1
 local nextShimmer3D = 1
+local isTouch = false
 
--- Pre-allocated top-K candidate slots for edge blips (zero per-frame allocations)
+-- Pre-allocated candidate, placed-blip, and HUD-avoidance buffers (zero per-frame allocations)
 local blipCandidates: { BlipSlot } = {}
+for i = 1, MAX_CANDIDATES do
+	blipCandidates[i] = { dist = math.huge, lx = 0, ly = 0, inRange = false, color = C_NEUTRAL }
+end
+
+local placedBlips: { PlacedBlip } = {}
 for i = 1, MAX_BLIPS do
-	blipCandidates[i] = { dist = math.huge, lx = 0, ly = 0 }
+	placedBlips[i] = { bx = 0, by = 0, lx = 0, ly = 0, dist = math.huge, inRange = false, color = C_NEUTRAL, count = 0 }
+end
+
+local avoidRects: { Rect } = {}
+for i = 1, MAX_AVOID_RECTS do
+	avoidRects[i] = { x1 = 0, y1 = 0, x2 = 0, y2 = 0 }
 end
 
 local sweepT = 0
@@ -185,7 +235,7 @@ local function buildBlip(parent: Frame, idx: number): BlipUI
 	makeCorner(bg, UDim.new(1, 0))
 	local st = makeStroke(bg, C_NEUTRAL_DIM, 0.3, 1.4)
 
-	-- TextSize 16 -> >= 10.4 px even at 0.65 mobile UIScale
+	-- "?" mark for off-screen creatures beyond scanner range (TextSize 16 -> >= 10.4 px at 0.65 mobile UIScale)
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "Mark"
 	lbl.BackgroundTransparency = 1
@@ -198,6 +248,37 @@ local function buildBlip(parent: Frame, idx: number): BlipUI
 	lbl.TextYAlignment = Enum.TextYAlignment.Center
 	lbl.ZIndex = 5
 	lbl.Parent = bg
+
+	-- Rarity-colored core dot for off-screen creatures inside scanner range
+	local dot = Instance.new("Frame")
+	dot.Name = "Dot"
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(0.5, 0.5)
+	dot.Size = UDim2.fromOffset(10, 10)
+	dot.BackgroundColor3 = C_NEUTRAL
+	dot.BorderSizePixel = 0
+	dot.Visible = false
+	dot.ZIndex = 5
+	dot.Parent = bg
+	makeCorner(dot, UDim.new(1, 0))
+
+	-- Stack count label ("×2", "×3", ...) placed on the inward side of merged blips
+	local countLbl = Instance.new("TextLabel")
+	countLbl.Name = "Count"
+	countLbl.AnchorPoint = Vector2.new(0.5, 0.5)
+	countLbl.Position = UDim2.fromScale(0.5, 0.5)
+	countLbl.Size = UDim2.fromOffset(0, 0)
+	countLbl.AutomaticSize = Enum.AutomaticSize.XY
+	countLbl.BackgroundTransparency = 1
+	countLbl.Font = FONT
+	countLbl.Text = ""
+	countLbl.TextSize = 16
+	countLbl.TextColor3 = C_NEUTRAL
+	countLbl.TextStrokeColor3 = C_PANEL
+	countLbl.TextStrokeTransparency = 0.35
+	countLbl.Visible = false
+	countLbl.ZIndex = 6
+	countLbl.Parent = root
 
 	-- Directional pointer chevron orbiting the pill
 	local arrowHolder = Instance.new("Frame")
@@ -234,6 +315,8 @@ local function buildBlip(parent: Frame, idx: number): BlipUI
 		bg = bg,
 		stroke = st,
 		label = lbl,
+		dot = dot,
+		countLabel = countLbl,
 		arrowHolder = arrowHolder,
 		armTop = armTop,
 		armBot = armBot,
@@ -269,7 +352,7 @@ local function buildShimmerUI(parent: Frame, idx: number): ShimmerUI
 end
 
 ----------------------------------------------------------------------------
--- 3D shimmer pool (built once per run, destroyed on cleanup)
+-- 3D shimmer pool (built once per run on run start, destroyed on cleanup)
 ----------------------------------------------------------------------------
 local function ensureShimmer3D()
 	if fxFolder and fxFolder.Parent then return end
@@ -377,38 +460,62 @@ local function cleanup()
 end
 
 ----------------------------------------------------------------------------
--- HUD avoidance for edge blips (desktop + phone)
+-- HUD avoidance for edge blips (multi-rect, zero allocations)
 ----------------------------------------------------------------------------
-local function avoidRect(bx: number, by: number, rx1: number, ry1: number, rx2: number, ry2: number, minX: number, maxX: number, minY: number, maxY: number): (number, number)
-	if bx < rx1 or bx > rx2 or by < ry1 or by > ry2 then
+local avoidCount = 0
+local avoidMinX, avoidMaxX, avoidMinY, avoidMaxY = 0, 0, 0, 0
+local avoidOrigX, avoidOrigY = 0, 0
+local avoidBestX, avoidBestY, avoidBestD2 = 0, 0, math.huge
+
+local function exploreAvoid(px: number, py: number, depth: number)
+	local hit: Rect? = nil
+	for i = 1, avoidCount do
+		local r = avoidRects[i]
+		if px > r.x1 and px < r.x2 and py > r.y1 and py < r.y2 then
+			hit = r
+			break
+		end
+	end
+	if not hit then
+		if px >= avoidMinX and px <= avoidMaxX and py >= avoidMinY and py <= avoidMaxY then
+			local dx = px - avoidOrigX
+			local dy = py - avoidOrigY
+			local d2 = dx * dx + dy * dy
+			if d2 < avoidBestD2 then
+				avoidBestD2, avoidBestX, avoidBestY = d2, px, py
+			end
+		end
+		return
+	end
+	if depth <= 0 then return end
+	if hit.x1 >= avoidMinX then exploreAvoid(hit.x1, py, depth - 1) end
+	if hit.x2 <= avoidMaxX then exploreAvoid(hit.x2, py, depth - 1) end
+	if hit.y1 >= avoidMinY then exploreAvoid(px, hit.y1, depth - 1) end
+	if hit.y2 <= avoidMaxY then exploreAvoid(px, hit.y2, depth - 1) end
+end
+
+local function resolveAvoidHUD(bx: number, by: number): (number, number)
+	local inside = false
+	for i = 1, avoidCount do
+		local r = avoidRects[i]
+		if bx > r.x1 and bx < r.x2 and by > r.y1 and by < r.y2 then
+			inside = true
+			break
+		end
+	end
+	if not inside then
 		return bx, by
 	end
-	-- Push to the nearest clear side of the rect that stays inside the safe box
-	local bestX, bestY = bx, by
-	local bestD = math.huge
-	if rx1 >= minX then
-		local d = bx - rx1
-		if d < bestD then bestD, bestX, bestY = d, rx1, by end
-	end
-	if rx2 <= maxX then
-		local d = rx2 - bx
-		if d < bestD then bestD, bestX, bestY = d, rx2, by end
-	end
-	if ry1 >= minY then
-		local d = by - ry1
-		if d < bestD then bestD, bestX, bestY = d, bx, ry1 end
-	end
-	if ry2 <= maxY then
-		local d = ry2 - by
-		if d < bestD then bestD, bestX, bestY = d, bx, ry2 end
-	end
-	return bestX, bestY
+	avoidOrigX, avoidOrigY = bx, by
+	avoidBestX, avoidBestY, avoidBestD2 = bx, by, math.huge
+	exploreAvoid(bx, by, 3)
+	return avoidBestX, avoidBestY
 end
 
 ----------------------------------------------------------------------------
 -- Per-frame update (called from ExpeditionController.stepFlight)
 ----------------------------------------------------------------------------
-function ScannerController.update(dt: number, fs: any, run: any)
+function ScannerController.update(dt: number, fs: FlightController.State, run: RunInfo?)
 	if not layer then return end
 	if not run or not fs or not fs.active then
 		if activeRunId ~= nil then cleanup() end
@@ -418,6 +525,8 @@ function ScannerController.update(dt: number, fs: any, run: any)
 	if activeRunId ~= run.runId then
 		cleanup()
 		activeRunId = run.runId
+		-- Pre-build 3D shimmer pool at run start to avoid a hitch on the first reveal
+		ensureShimmer3D()
 	end
 
 	local cam = workspace.CurrentCamera
@@ -429,8 +538,9 @@ function ScannerController.update(dt: number, fs: any, run: any)
 
 	local vp = cam.ViewportSize
 	local uiScale = math.clamp(math.min(vp.X / 1280, vp.Y / 720), 0.65, 1.25)
-	local range: number = if run.stats and typeof(run.stats.scanner) == "number" then run.stats.scanner else 60
+	local range: number = if run.stats and typeof(run.stats.scanner) == "number" then run.stats.scanner else DEFAULT_SCANNER_RANGE
 	local maxBlipDist = range * 2
+	local revealMarginPx = REVEAL_EDGE_STUDS * (vp.Y / VIEW_HEIGHT)
 
 	-- Decay 3D shimmer lights
 	for _, fx in shimmer3Ds do
@@ -450,7 +560,9 @@ function ScannerController.update(dt: number, fs: any, run: any)
 	pulseT += dt
 	sweepT = (sweepT + dt) % SWEEP_PERIOD
 
-	-- 1) Subtle Mission Control scanner ring around the drone
+	-- 1) Decorative Mission Control sweep reticle centered on the drone.
+	-- Real scanner range (60+ studs) exceeds the camera view (62 studs tall),
+	-- so this ring is a fixed visual sweep rather than a 1:1 range indicator.
 	local droneWorld = Vector3.new(ORIGIN.X + fs.x, ORIGIN.Y + fs.y, ORIGIN.Z)
 	local dronePt = cam:WorldToScreenPoint(droneWorld)
 	local droneLx = dronePt.X - fPos.X
@@ -458,11 +570,8 @@ function ScannerController.update(dt: number, fs: any, run: any)
 
 	if ringFrame and sweepFrame and sweepStroke then
 		if dronePt.Z > 0 then
-			-- Keep the ring nicely visible in the free screen center; grows slightly with scanner upgrades
-			local upgradeFrac = math.clamp((range - 60) / 144, 0, 1)
 			local logicalH = fSize.Y / uiScale
-			local ringRadius = logicalH * (0.26 + 0.07 * upgradeFrac)
-			local ringDiam = math.floor(ringRadius * 2 + 0.5)
+			local ringDiam = math.floor(logicalH * 0.52 + 0.5)
 			ringFrame.Size = UDim2.fromOffset(ringDiam, ringDiam)
 			ringFrame.Position = UDim2.fromScale(droneLx / fSize.X, droneLy / fSize.Y)
 			ringFrame.Visible = true
@@ -489,27 +598,34 @@ function ScannerController.update(dt: number, fs: any, run: any)
 		local dx = l.x - fs.x
 		local dy = l.y - fs.y
 		local dist = math.sqrt(dx * dx + dy * dy)
-
-		-- Hidden reveal: when a Hidden creature enters scanner range, reveal it + shimmer
-		if not l.revealed then
-			if dist <= range then
-				CreatureSimClient.reveal(l)
-				triggerShimmer(l.x, l.y, l.rarity.color)
-			else
-				-- Unrevealed Hidden creatures stay completely invisible (no blip, no ring)
-				continue
-			end
-		end
-
 		if dist > maxBlipDist then continue end
+		if not l.revealed and dist > range then continue end
 
 		local cWorld = Vector3.new(ORIGIN.X + l.x, ORIGIN.Y + l.y, ORIGIN.Z)
 		local cPt = cam:WorldToScreenPoint(cWorld)
 		local lx = cPt.X - fPos.X
 		local ly = cPt.Y - fPos.Y
-		local onScreen = cPt.Z > 0 and lx >= 0 and lx <= fSize.X and ly >= 0 and ly <= fSize.Y
 
-		if dist <= range and onScreen and l.vanish <= 0 then
+		-- Hidden reveal: require both scanner range AND being inside the visible
+		-- screen (~3 studs from the edge) so the reveal shimmer is always seen
+		-- even though scanner range (60+ studs) is wider than the camera view.
+		if not l.revealed then
+			local inRevealFrame = cPt.Z > 0
+				and lx >= revealMarginPx and lx <= fSize.X - revealMarginPx
+				and ly >= revealMarginPx and ly <= fSize.Y - revealMarginPx
+			if inRevealFrame then
+				CreatureSimClient.reveal(l)
+				triggerShimmer(l.x, l.y, l.rarity.color)
+			else
+				-- Unrevealed Hidden creatures stay invisible (no blip, no ring)
+				continue
+			end
+		end
+
+		local onScreen = cPt.Z > 0 and lx >= 0 and lx <= fSize.X and ly >= 0 and ly <= fSize.Y
+		local inRange = dist <= range
+
+		if inRange and onScreen and l.vanish <= 0 then
 			-- Inside scanner range and visible: show rarity ring
 			if ringUsed < MAX_RARITY_RINGS then
 				ringUsed += 1
@@ -528,30 +644,33 @@ function ScannerController.update(dt: number, fs: any, run: any)
 				rr.frame.Visible = true
 			end
 		elseif not onScreen then
-			-- Off screen and within 2x scanner range: insert into top-K nearest edge blips
+			-- Off screen and within 2x scanner range: insert into nearest-first candidates
 			local targetLx, targetLy = lx, ly
 			if cPt.Z < 0 then
 				targetLx = fSize.X - lx
 				targetLy = fSize.Y - ly
 			end
-			if candCount < MAX_BLIPS then
+			if candCount < MAX_CANDIDATES then
 				candCount += 1
 				local slot = blipCandidates[candCount]
 				slot.dist = dist
 				slot.lx = targetLx
 				slot.ly = targetLy
-				-- Insertion sort to keep nearest first
+				slot.inRange = inRange
+				slot.color = l.rarity.color
 				local j = candCount
 				while j > 1 and blipCandidates[j].dist < blipCandidates[j - 1].dist do
 					blipCandidates[j], blipCandidates[j - 1] = blipCandidates[j - 1], blipCandidates[j]
 					j -= 1
 				end
-			elseif dist < blipCandidates[MAX_BLIPS].dist then
-				local slot = blipCandidates[MAX_BLIPS]
+			elseif dist < blipCandidates[MAX_CANDIDATES].dist then
+				local slot = blipCandidates[MAX_CANDIDATES]
 				slot.dist = dist
 				slot.lx = targetLx
 				slot.ly = targetLy
-				local j = MAX_BLIPS
+				slot.inRange = inRange
+				slot.color = l.rarity.color
+				local j = MAX_CANDIDATES
 				while j > 1 and blipCandidates[j].dist < blipCandidates[j - 1].dist do
 					blipCandidates[j], blipCandidates[j - 1] = blipCandidates[j - 1], blipCandidates[j]
 					j -= 1
@@ -565,63 +684,143 @@ function ScannerController.update(dt: number, fs: any, run: any)
 		rarityRings[i].frame.Visible = false
 	end
 
-	-- 3) Position edge blips along the safe screen perimeter, avoiding HUD panels
+	-- 3) Build live HUD panel avoidance rects from AbsolutePosition/AbsoluteSize
+	local edgeMargin = 26 * uiScale
+	local blipMargin = 22 * uiScale -- clears the full pill + stroke, not just its center
+	avoidMinX = edgeMargin
+	avoidMaxX = fSize.X - edgeMargin
+	avoidMinY = edgeMargin
+	avoidMaxY = fSize.Y - edgeMargin
+	avoidCount = 0
+
+	for _, panel in avoidPanels do
+		if not panel.Visible then continue end
+		if panel.Name == "Beam" and not isTouch then continue end
+		local pSize = panel.AbsoluteSize
+		if pSize.X < 1 or pSize.Y < 1 then continue end
+		if avoidCount >= MAX_AVOID_RECTS then break end
+		local pPos = panel.AbsolutePosition
+		local rx1 = pPos.X - fPos.X - blipMargin
+		local ry1 = pPos.Y - fPos.Y - blipMargin
+		local rx2 = pPos.X - fPos.X + pSize.X + blipMargin
+		local ry2 = pPos.Y - fPos.Y + pSize.Y + blipMargin
+		avoidCount += 1
+		local r = avoidRects[avoidCount]
+		r.x1, r.y1, r.x2, r.y2 = rx1, ry1, rx2, ry2
+	end
+
+	-- Place blips nearest-first and merge overlapping ones into a single pill with "×N"
 	local cx = fSize.X * 0.5
 	local cy = fSize.Y * 0.5
-	local minX = 28 * uiScale
-	local maxX = fSize.X - 28 * uiScale
-	local minY = 28 * uiScale
-	-- Bottom margin clears CargoBay (70 logical px) and Recall (80 logical px)
-	local maxY = fSize.Y - 98 * uiScale
-	local isTouch = InputController.device() == "touch"
+	local mergeDist = 34 * uiScale
+	local mergeDistSq = mergeDist * mergeDist
+	local placedCount = 0
 
-	for i = 1, MAX_BLIPS do
-		local b = blips[i]
-		if i > candCount then
-			b.root.Visible = false
-			continue
-		end
+	for i = 1, candCount do
 		local cand = blipCandidates[i]
 		local vx = cand.lx - cx
 		local vy = cand.ly - cy
 		local t = math.huge
 		if vx > 1e-4 then
-			t = math.min(t, (maxX - cx) / vx)
+			t = math.min(t, (avoidMaxX - cx) / vx)
 		elseif vx < -1e-4 then
-			t = math.min(t, (minX - cx) / vx)
+			t = math.min(t, (avoidMinX - cx) / vx)
 		end
 		if vy > 1e-4 then
-			t = math.min(t, (maxY - cy) / vy)
+			t = math.min(t, (avoidMaxY - cy) / vy)
 		elseif vy < -1e-4 then
-			t = math.min(t, (minY - cy) / vy)
+			t = math.min(t, (avoidMinY - cy) / vy)
 		end
 		if t == math.huge then t = 0 end
 
-		local bx = math.clamp(cx + vx * t, minX, maxX)
-		local by = math.clamp(cy + vy * t, minY, maxY)
+		local bx = math.clamp(cx + vx * t, avoidMinX, avoidMaxX)
+		local by = math.clamp(cy + vy * t, avoidMinY, avoidMaxY)
+		bx, by = resolveAvoidHUD(bx, by)
 
-		-- Avoid Top-Left Status panel (16..292, 12..106) and Altimeter (16..204, 114..344)
-		bx, by = avoidRect(bx, by, 0, 0, 312 * uiScale, 126 * uiScale, minX, maxX, minY, maxY)
-		bx, by = avoidRect(bx, by, 0, 108 * uiScale, 224 * uiScale, 364 * uiScale, minX, maxX, minY, maxY)
-		-- Avoid Touch Beam button on phones (bottom-right above Recall)
-		if isTouch then
-			bx, by = avoidRect(bx, by, fSize.X - 150 * uiScale, fSize.Y - 216 * uiScale, fSize.X, fSize.Y, minX, maxX, minY, maxY)
+		local merged = false
+		for j = 1, placedCount do
+			local p = placedBlips[j]
+			local pdx = bx - p.bx
+			local pdy = by - p.by
+			if pdx * pdx + pdy * pdy < mergeDistSq then
+				p.count += 1
+				merged = true
+				break
+			end
 		end
 
-		local ang = math.atan2(cand.ly - by, cand.lx - bx)
+		if not merged and placedCount < MAX_BLIPS then
+			placedCount += 1
+			local p = placedBlips[placedCount]
+			p.bx = bx
+			p.by = by
+			p.lx = cand.lx
+			p.ly = cand.ly
+			p.dist = cand.dist
+			p.inRange = cand.inRange
+			p.color = cand.color
+			p.count = 1
+		end
+	end
+
+	-- Render placed edge blips
+	for i = 1, MAX_BLIPS do
+		local b = blips[i]
+		if i > placedCount then
+			b.root.Visible = false
+			continue
+		end
+		local p = placedBlips[i]
+		local ang = math.atan2(p.ly - p.by, p.lx - p.bx)
 		local deg = math.deg(ang)
-		b.root.Position = UDim2.fromScale(bx / fSize.X, by / fSize.Y)
+		b.root.Position = UDim2.fromScale(p.bx / fSize.X, p.by / fSize.Y)
 		b.arrowHolder.Position = UDim2.new(0.5, math.cos(ang) * 19, 0.5, math.sin(ang) * 19)
 		b.arrowHolder.Rotation = deg
 
-		-- Faintness scales with distance (clearer near scanner range, fainter near 2x range)
-		local distFrac = math.clamp((cand.dist - range) / math.max(1, range), 0, 1)
-		local fade = 0.15 + 0.45 * distFrac
-		b.bg.BackgroundTransparency = math.clamp(0.25 + 0.45 * distFrac, 0, 0.9)
-		b.stroke.Transparency = math.clamp(0.25 + 0.5 * distFrac, 0, 0.92)
-		b.label.TextTransparency = fade
-		b.armTop.BackgroundTransparency = fade
-		b.armBot.BackgroundTransparency = fade
+		local fade: number
+		if p.inRange then
+			-- Inside scanner range: rarity-colored blip without "?"
+			fade = 0.05
+			b.label.Visible = false
+			b.dot.Visible = true
+			b.dot.BackgroundColor3 = p.color
+			b.dot.BackgroundTransparency = fade
+			b.bg.BackgroundColor3 = C_PANEL:Lerp(p.color, 0.22)
+			b.bg.BackgroundTransparency = 0.2
+			b.stroke.Color = p.color
+			b.stroke.Transparency = 0.12
+			b.armTop.BackgroundColor3 = p.color
+			b.armBot.BackgroundColor3 = p.color
+			b.armTop.BackgroundTransparency = fade
+			b.armBot.BackgroundTransparency = fade
+		else
+			-- Beyond scanner range (up to 2x): neutral "?" fading with distance
+			local distFrac = math.clamp((p.dist - range) / math.max(1, range), 0, 1)
+			fade = 0.15 + 0.45 * distFrac
+			b.dot.Visible = false
+			b.label.Visible = true
+			b.label.TextColor3 = C_NEUTRAL
+			b.label.TextTransparency = fade
+			b.bg.BackgroundColor3 = C_PANEL
+			b.bg.BackgroundTransparency = math.clamp(0.25 + 0.45 * distFrac, 0, 0.9)
+			b.stroke.Color = C_NEUTRAL_DIM
+			b.stroke.Transparency = math.clamp(0.25 + 0.5 * distFrac, 0, 0.92)
+			b.armTop.BackgroundColor3 = C_NEUTRAL
+			b.armBot.BackgroundColor3 = C_NEUTRAL
+			b.armTop.BackgroundTransparency = fade
+			b.armBot.BackgroundTransparency = fade
+		end
+
+		if p.count > 1 then
+			b.countLabel.Text = "×" .. tostring(p.count)
+			b.countLabel.TextColor3 = if p.inRange then p.color else C_NEUTRAL
+			b.countLabel.TextTransparency = fade
+			b.countLabel.Position = UDim2.new(0.5, -math.cos(ang) * 23, 0.5, -math.sin(ang) * 23)
+			b.countLabel.Visible = true
+		else
+			b.countLabel.Visible = false
+		end
+
 		b.root.Visible = true
 	end
 
@@ -654,7 +853,6 @@ end
 ----------------------------------------------------------------------------
 function ScannerController.init()
 	local l = HUDController.scannerLayer()
-	layer = l
 	buildDroneRing(l)
 	for i = 1, MAX_BLIPS do
 		table.insert(blips, buildBlip(l, i))
@@ -666,15 +864,31 @@ function ScannerController.init()
 		table.insert(shimmerUIs, buildShimmerUI(l, i))
 	end
 
-	-- Clean up automatically when the flight HUD hides at run end
+	-- Cache touch state so update() never polls InputController.device() per frame
+	isTouch = InputController.device() == "touch"
+	InputController.DeviceChanged:Connect(function(dev: string)
+		isTouch = dev == "touch"
+	end)
+
+	-- Cache flight HUD panels for dynamic blip avoidance and hook run-end cleanup
 	local parentFrame = l.Parent
 	if parentFrame and parentFrame:IsA("GuiObject") then
+		table.clear(avoidPanels)
+		for _, name in AVOID_PANEL_NAMES do
+			local panel = parentFrame:FindFirstChild(name)
+			if panel and panel:IsA("GuiObject") then
+				table.insert(avoidPanels, panel)
+			end
+		end
 		parentFrame:GetPropertyChangedSignal("Visible"):Connect(function()
 			if not parentFrame.Visible then
 				cleanup()
 			end
 		end)
 	end
+
+	-- Set layer last so update() stays a safe no-op if init() fails earlier
+	layer = l
 end
 
 return ScannerController

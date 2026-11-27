@@ -94,7 +94,6 @@ local function stepFlight(rawDt: number)
 	local camPos = workspace.CurrentCamera.CFrame.Position
 	local speed = math.sqrt(fs.vx * fs.vx + fs.vy * fs.vy)
 	CreatureSimClient.update(dt, fs.x, fs.y, speed, nozzle, camPos.X - ORIGIN.X, camPos.Y - ORIGIN.Y)
-	ScannerController.update(dt, fs, run)
 
 	hudTimer -= rawDt
 	if hudTimer <= 0 then
@@ -105,6 +104,8 @@ local function stepFlight(rawDt: number)
 			HUDController.toast("Battery low: recall soon", DANGER, true)
 		end
 	end
+
+	ScannerController.update(dt, fs, run)
 end
 
 local function connectLoop()
