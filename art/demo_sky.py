@@ -5,12 +5,14 @@ Everything is flat low-poly, drawn with the same shapes as the demo canvas code:
                 tinted in game with ImageColor3 = the demo's per-altitude cloud colour
   planet.png    ringed planet (12 alternating wedges, dusky band, ring back + front)
   moon.png      small faceted moon
-  earth.png     top cap of the Earth curve (60 wedges) with the blue atmosphere rim
+  earth_l/r.png top cap of the Earth: faceted low-poly globe (ocean, continents, ice, cloud
+                bands) with the blue atmosphere rim, split in two tiles
   sunglow.png   soft radial sun glow
   mount_N.png   4 tiles of the far blue mountain range
 Rendered at 4x and downsampled for clean anti-aliased edges.
 
-Usage: python art/demo_sky.py   -> art/out/demo/*.png
+Usage: python art/demo_sky.py         -> art/out/demo/*.png
+       python art/demo_sky.py earth   -> only the Earth tiles (earth_l.png, earth_r.png)
 """
 import json
 import math
@@ -176,38 +178,145 @@ def render_moon():
     return {"file": "moon.png", "px": size, "radiusPx": r}
 
 
+# Earth: flat low-poly globe instead of the demo's 60 colour wedges (they read as a beach ball).
+# The cap is the top of a sphere seen side-on (orthographic), so the shapes foreshorten toward
+# the limb like a real planet. A lat/lon grid is cut into triangles; each triangle gets one flat
+# colour (ocean / land / ice) lit by a fixed sun from the upper left = the faceted demo look.
+# toned down: the Edge of Space colour correction adds ~+0.28 saturation in game
+EARTH_OCEAN = [hexc("#336f9c"), hexc("#3877a3"), hexc("#3c7fa9")]
+EARTH_LAND = [hexc("#5e9468"), hexc("#578c61"), hexc("#669c6e"), hexc("#b8aa82")]
+EARTH_ICE = hexc("#e6f2f8")
+# original, stylised continents as (lon, lat) outlines in degrees (not traced from any map)
+EARTH_CONTINENTS = [
+    [(-78, 38), (-70, 47), (-58, 55), (-46, 63), (-32, 61), (-24, 54), (-28, 45), (-40, 40), (-52, 34), (-66, 32)],
+    [(4, 44), (12, 53), (24, 60), (38, 67), (54, 64), (66, 56), (72, 46), (60, 40), (44, 37), (30, 39), (16, 38)],
+    [(-12, 66), (-4, 73), (8, 75), (14, 70), (6, 64), (-4, 62)],
+    [(70, 66), (78, 72), (88, 70), (84, 64)],
+    [(-90, 58), (-82, 64), (-74, 62), (-80, 56)],
+]
+EARTH_CLOUDS = [  # thin bands: (lon0, lon1, lat, half-thickness in degrees)
+    (-88, -30, 47, 1.6), (-20, 40, 56, 1.3), (30, 86, 43, 1.5), (-60, 10, 69, 1.1), (50, 90, 61, 1.0),
+]
+
+
+def _inside(poly, x, y):
+    c = False
+    j = len(poly) - 1
+    for i in range(len(poly)):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / (yj - yi) + xi:
+            c = not c
+        j = i
+    return c
+
+
 def render_earth():
-    # demo: r = 1500 units, atmosphere rim radial gradient r*0.98 -> r*1.06, 60 wedges (3 colours)
+    # demo geometry kept: r = 1500 units, atmosphere rim r*0.98 -> r*1.06, top cap 720 units deep
     R = 1500.0
-    cap = 720.0  # how deep below the top of the curve the image reaches (units)
+    cap = 720.0
     halfw = math.sqrt(R * R - (R - cap) ** 2) + 40
     rim = R * 1.06
     top = rim - R  # glow above the curve
-    ppu = 0.42  # px per unit (soft content: rim glow + low-contrast wedges)
-    W = int(2 * halfw * ppu)
+    ppu = 0.75  # px per unit: about 2x the old art, split into two tiles (Roblox max 1024 px)
+    W = int(2 * halfw * ppu) // 2 * 2
     H = int((cap + top) * ppu)
     cx, cy = W / 2, (R + top) * ppu
+    rnd = random.Random(23)
+
+    # 1. atmosphere glow (smooth, numpy) as the bottom layer
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     dist = np.sqrt((xx - cx) ** 2 + (yy - cy) ** 2) / ppu
-    # rim glow (alpha .9 at r*0.98 fading to 0 at r*1.06)
     t = np.clip((dist - R * 0.98) / (R * 0.08), 0, 1)
-    glow_a = 0.9 * (1 - t)
-    rgb = np.zeros((H, W, 3), np.float32)
-    rgb[...] = np.array([120, 210, 255], np.float32) / 255
-    alpha = np.where(dist <= rim, glow_a, 0)
-    # wedges
-    ang = np.arctan2(yy - cy, xx - cx)  # -pi..0 on the upper half
-    k = np.floor((ang - math.pi) % (2 * math.pi) / math.pi * 60).astype(int) % 3
-    cols = np.array([hexc("#3b9c8f"), hexc("#4aa6c9"), hexc("#3a8fb8")], np.float32) / 255
-    inside = dist <= R
-    # anti-aliased limb
-    edge = np.clip((R - dist) * ppu + 0.5, 0, 1)
-    wc = cols[k]
-    rgb = rgb * (1 - edge[..., None]) + wc * edge[..., None]
-    alpha = np.maximum(alpha, edge)
-    img = Image.fromarray((np.dstack([np.clip(rgb, 0, 1), np.clip(alpha, 0, 1)[..., None]]) * 255).astype(np.uint8), "RGBA")
-    img.save(os.path.join(OUT, "earth.png"))
-    return {"file": "earth.png", "px": img.size, "unitsW": 2 * halfw, "unitsH": cap + top, "topU": top}
+    glow_a = np.where(dist <= rim, 0.9 * (1 - t) ** 1.4, 0)
+    glow = np.zeros((H, W, 4), np.float32)
+    glow[..., :3] = np.array([120, 210, 255], np.float32)
+    glow[..., 3] = glow_a * 255
+    base = Image.fromarray(glow.astype(np.uint8), "RGBA")
+
+    # 2. faceted globe (PIL, supersampled)
+    globe = Image.new("RGBA", (W * SS, H * SS), (0, 0, 0, 0))
+    d = ImageDraw.Draw(globe)
+    light = np.array([-0.45, 0.62, 0.64])
+    light /= np.linalg.norm(light)
+
+    def proj(lon, lat):  # sphere point -> image px (supersampled) and its normal
+        lo, la = math.radians(lon), math.radians(lat)
+        n = np.array([math.cos(la) * math.sin(lo), math.sin(la), math.cos(la) * math.cos(lo)])
+        return ((cx + n[0] * R * ppu) * SS, (cy - n[1] * R * ppu) * SS), n
+
+    def shade(col, n):
+        k = 0.9 + 0.16 * max(0.0, float(n @ light))
+        return tuple(int(min(255, c * k)) for c in col) + (255,)
+
+    # jittered lat/lon grid over the visible cap (lat >= 26, front hemisphere)
+    lats = [26 + i * 4.0 for i in range(17)] + [90.0]
+    lons = [-92 + j * 4.0 for j in range(47)]
+    grid = {}
+    for i, la in enumerate(lats):
+        for j, lo in enumerate(lons):
+            jl = 0 if la >= 90 else rnd.uniform(-1.1, 1.1)
+            grid[(i, j)] = (lo + rnd.uniform(-1.2, 1.2), min(90.0, la + jl))
+    for i in range(len(lats) - 1):
+        for j in range(len(lons) - 1):
+            a, b, c2, e = grid[(i, j)], grid[(i, j + 1)], grid[(i + 1, j + 1)], grid[(i + 1, j)]
+            for tri in ((a, b, c2), (a, c2, e)):
+                clon = sum(p[0] for p in tri) / 3
+                clat = sum(p[1] for p in tri) / 3
+                if True:
+                    land = any(_inside(poly, clon, clat) for poly in EARTH_CONTINENTS)
+                    if land:  # mostly greens, a few sandy facets
+                        col = EARTH_LAND[3] if rnd.random() < 0.06 else EARTH_LAND[rnd.randrange(3)]
+                    else:
+                        col = EARTH_OCEAN[rnd.randrange(len(EARTH_OCEAN))]
+                pts, normals = zip(*(proj(lo, la) for lo, la in tri))
+                nrm = sum(normals) / 3
+                d.polygon(list(pts), fill=shade(col, nrm))
+
+    # polar ice: a smooth cap above lat 82 (bounded by the limb meridians), not jagged facets
+    ice = [proj(lo, 82 + 1.2 * math.sin(lo * 0.21)) [0] for lo in range(-90, 91, 3)]
+    ice += [proj(90, la)[0] for la in range(83, 91)] + [proj(-90, la)[0] for la in range(90, 82, -1)]
+    d.polygon(ice, fill=shade(EARTH_ICE, np.array([0.0, 0.97, 0.24])))
+
+    # cloud streaks: tapered, slightly wavy, two thin strands per band, semi-transparent
+    cl = Image.new("RGBA", globe.size, (0, 0, 0, 0))
+    dc = ImageDraw.Draw(cl)
+    for lo0, lo1, la, hw in EARTH_CLOUDS:
+        for strand in range(2):
+            off = (strand - 0.5) * hw * 1.3
+            a0 = lo0 + strand * (lo1 - lo0) * 0.18
+            a1 = lo1 - (1 - strand) * (lo1 - lo0) * 0.15
+            steps = max(4, int((a1 - a0) / 3))
+            upper, lower = [], []
+            for s in range(steps + 1):
+                u = s / steps
+                lo = a0 + (a1 - a0) * u
+                w = hw * (0.75 - 0.25 * strand) * math.sin(math.pi * u) ** 0.8
+                mid = la + off + 0.6 * math.sin(u * 7 + strand * 2)
+                upper.append(proj(lo, mid + w)[0])
+                lower.append(proj(lo, mid - w)[0])
+            dc.polygon(upper + lower[::-1], fill=(248, 252, 255, 175))
+    globe = Image.alpha_composite(globe, cl)
+
+    # clip to the disc (anti-aliased limb) and add a thin bright limb line
+    mask = Image.new("L", globe.size, 0)
+    ImageDraw.Draw(mask).ellipse([(cx - R * ppu) * SS, (cy - R * ppu) * SS, (cx + R * ppu) * SS, (cy + R * ppu) * SS], fill=255)
+    globe.putalpha(Image.fromarray(np.minimum(np.array(globe.getchannel("A")), np.array(mask))))
+    limb = Image.new("RGBA", globe.size, (0, 0, 0, 0))
+    lw = int(4 * SS)
+    ImageDraw.Draw(limb).ellipse([(cx - R * ppu) * SS + lw / 2, (cy - R * ppu) * SS + lw / 2, (cx + R * ppu) * SS - lw / 2, (cy + R * ppu) * SS - lw / 2], outline=(170, 230, 255, 150), width=lw)
+    globe = Image.alpha_composite(globe, limb)
+    globe = globe.resize((W, H), Image.LANCZOS)
+
+    img = Image.alpha_composite(base, globe)
+    # two tiles side by side (each <= 1024 px wide for Roblox)
+    half = W // 2
+    files = []
+    for k, name in enumerate(("earth_l.png", "earth_r.png")):
+        img.crop((k * half, 0, (k + 1) * half, H)).save(os.path.join(OUT, name))
+        files.append(name)
+    img.save(os.path.join(OUT, "earth_preview.png"))
+    return {"files": files, "px": [W, H], "tilePx": [half, H], "unitsW": 2 * halfw, "unitsH": cap + top, "topU": top}
 
 
 def render_sunglow():
@@ -258,6 +367,16 @@ def render_mountains(rnd):
 
 
 def main():
+    import sys
+    if "earth" in sys.argv[1:]:
+        # re-render only the Earth and update its entry in meta.json
+        path = os.path.join(OUT, "meta.json")
+        meta = json.load(open(path)) if os.path.exists(path) else {}
+        meta["earth"] = render_earth()
+        with open(path, "w") as f:
+            json.dump(meta, f, indent=1)
+        print(json.dumps(meta["earth"], indent=1))
+        return
     rnd = random.Random(7)
     meta = {"clouds": []}
     for i in range(8):

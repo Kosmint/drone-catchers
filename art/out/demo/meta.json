@@ -106,10 +106,17 @@
   "radiusPx": 110.0
  },
  "earth": {
-  "file": "earth.png",
+  "files": [
+   "earth_l.png",
+   "earth_r.png"
+  ],
   "px": [
-   1109,
-   340
+   1980,
+   607
+  ],
+  "tilePx": [
+   990,
+   607
   ],
   "unitsW": 2642.4987804875145,
   "unitsH": 810.0,

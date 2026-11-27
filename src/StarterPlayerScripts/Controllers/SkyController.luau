@@ -42,7 +42,7 @@ local planetLabel: ImageLabel? = nil
 local moonCard: ScreenCard? = nil
 local moonLabel: ImageLabel? = nil
 local earthCard: ScreenCard? = nil
-local earthLabel: ImageLabel? = nil
+local earthLabels: { ImageLabel } = {} -- left + right tile
 
 local function clamp01(v: number): number
 	return math.clamp(v, 0, 1)
@@ -200,8 +200,16 @@ local function buildScreenLayers()
 	local pc = screenCard("Planet", 950, Vector2.new(512, 300))
 	planetCard, planetLabel = pc, newImage(pc.gui, SkyArt.planet.image)
 
-	local ec = screenCard("Earth", 600, Vector2.new(1109, 340))
-	earthCard, earthLabel = ec, newImage(ec.gui, SkyArt.earth.image)
+	-- Earth: two tiles side by side on one card (each under Roblox's 1024 px limit, crisp limb)
+	local art = SkyArt.earth
+	local ec = screenCard("Earth", 600, Vector2.new(art.pxW, art.pxH))
+	earthCard, earthLabels = ec, {}
+	for i, image in art.images do
+		local l = newImage(ec.gui, image)
+		l.Size = UDim2.fromScale(1 / #art.images, 1)
+		l.Position = UDim2.fromScale((i - 1) / #art.images, 0)
+		table.insert(earthLabels, l)
+	end
 end
 
 ----------------------------------------------------------------------------
@@ -228,7 +236,8 @@ function SkyController.finish()
 	table.clear(stars)
 	gradientCard, gradient, starCard = nil, nil, nil
 	sunCard, sunLabel, planetCard, planetLabel = nil, nil, nil, nil
-	moonCard, moonLabel, earthCard, earthLabel = nil, nil, nil, nil
+	moonCard, moonLabel, earthCard = nil, nil, nil
+	earthLabels = {}
 end
 
 -- call after the camera moved this frame
@@ -307,10 +316,10 @@ function SkyController.update(dt: number)
 
 	-- Earth curve with its blue rim
 	local ea = clamp01((alt - 3700) / 900)
-	if earthCard and earthLabel then
+	if earthCard and #earthLabels > 0 then
 		earthCard.gui.Enabled = ea > 0
 		if ea > 0 then
-			earthLabel.ImageTransparency = 1 - ea
+			for _, l in earthLabels do l.ImageTransparency = 1 - ea end
 			local e = SkyArt.earth
 			local ecx = wUnits / 2 - cx * 0.05
 			local ecy = VIEW_UNITS + (1300 - (alt - 4600) * 0.22)
