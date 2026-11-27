@@ -283,7 +283,7 @@ local function buildFlight()
 	local status = panel({
 		Name = "Status",
 		Position = UDim2.fromOffset(16, 12),
-		Size = UDim2.fromOffset(264, 96),
+		Size = UDim2.fromOffset(276, 94),
 		Parent = flightFrame,
 	}, C.cyan, true)
 	refs.statusPanel = status
@@ -293,29 +293,29 @@ local function buildFlight()
 	refs.batIcon = buildBatteryIcon(status, UDim2.fromOffset(12, 13))
 	label({
 		Text = "BATTERY",
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(36, 11),
-		Size = UDim2.fromOffset(80, 14),
+		Position = UDim2.fromOffset(36, 9),
+		Size = UDim2.fromOffset(86, 18),
 		Parent = status,
 	})
 	refs.batDrainTag = label({
 		Text = "BEAM",
-		TextSize = 9,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(112, 11),
-		Size = UDim2.fromOffset(44, 14),
+		Position = UDim2.fromOffset(126, 9),
+		Size = UDim2.fromOffset(58, 18),
 		Visible = false,
 		Parent = status,
 	})
 	refs.batPct = label({
 		Text = "100%",
-		TextSize = 14,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.new(1, -74, 0, 9),
-		Size = UDim2.fromOffset(62, 18),
+		Position = UDim2.new(1, -76, 0, 9),
+		Size = UDim2.fromOffset(64, 18),
 		Parent = status,
 	})
 
@@ -324,7 +324,7 @@ local function buildFlight()
 		BackgroundColor3 = C.track,
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
-		Position = UDim2.fromOffset(12, 31),
+		Position = UDim2.fromOffset(12, 32),
 		Size = UDim2.new(1, -24, 0, 14),
 		Parent = status,
 	}, {
@@ -381,17 +381,17 @@ local function buildFlight()
 	buildHullIcon(status, UDim2.fromOffset(12, 66))
 	label({
 		Text = "HULL",
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(32, 66),
-		Size = UDim2.fromOffset(42, 14),
+		Position = UDim2.fromOffset(32, 64),
+		Size = UDim2.fromOffset(52, 18),
 		Parent = status,
 	})
 	refs.hull = make("Frame", {
 		Name = "HullPips",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(78, 65),
-		Size = UDim2.new(1, -132, 0, 16),
+		Position = UDim2.fromOffset(88, 65),
+		Size = UDim2.new(1, -148, 0, 16),
 		Parent = status,
 	}, {
 		make("UIListLayout", {
@@ -402,44 +402,44 @@ local function buildFlight()
 	})
 	refs.hullReadout = label({
 		Text = "3/3",
-		TextSize = 12,
+		TextSize = 16,
 		TextColor3 = C.fg,
 		TextXAlignment = Enum.TextXAlignment.Right,
-		Position = UDim2.new(1, -50, 0, 65),
-		Size = UDim2.fromOffset(38, 16),
+		Position = UDim2.new(1, -56, 0, 64),
+		Size = UDim2.fromOffset(44, 18),
 		Parent = status,
 	})
 
-	-- 2) Left Vertical Altimeter
+	-- 2) Left Vertical Altimeter (ends at logical y=344 -> 224px at 0.65 scale, clear of thumbstick)
 	local alt = panel({
 		Name = "Altimeter",
-		Position = UDim2.fromOffset(16, 118),
-		Size = UDim2.fromOffset(160, 256),
+		Position = UDim2.fromOffset(16, 114),
+		Size = UDim2.fromOffset(188, 230),
 		Parent = flightFrame,
 	}, C.cyan, true)
 	label({
 		Text = "ALTITUDE",
-		TextSize = 10,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(12, 9),
-		Size = UDim2.new(1, -24, 0, 12),
+		Position = UDim2.fromOffset(12, 8),
+		Size = UDim2.new(1, -24, 0, 18),
 		Parent = alt,
 	})
 	refs.altKm = label({
 		Text = "0.0 km",
 		TextSize = 21,
 		TextColor3 = C.fg,
-		Position = UDim2.fromOffset(12, 21),
+		Position = UDim2.fromOffset(12, 26),
 		Size = UDim2.new(1, -24, 0, 24),
 		Parent = alt,
 	})
 	refs.altZone = label({
 		Text = "LOW SKY",
 		Font = FONT,
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.cyan,
-		Position = UDim2.fromOffset(12, 46),
-		Size = UDim2.new(1, -24, 0, 14),
+		Position = UDim2.fromOffset(12, 50),
+		Size = UDim2.new(1, -24, 0, 18),
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = alt,
 	})
@@ -447,15 +447,15 @@ local function buildFlight()
 		BackgroundColor3 = C.cyan,
 		BackgroundTransparency = 0.82,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(12, 65),
+		Position = UDim2.fromOffset(12, 72),
 		Size = UDim2.new(1, -24, 0, 1),
 		Parent = alt,
 	})
 	refs.altTrack = make("Frame", {
 		Name = "Track",
 		BackgroundTransparency = 1,
-		Position = UDim2.fromOffset(14, 74),
-		Size = UDim2.new(1, -26, 1, -86),
+		Position = UDim2.fromOffset(14, 80),
+		Size = UDim2.new(1, -26, 1, -90),
 		Parent = alt,
 	})
 
@@ -464,14 +464,14 @@ local function buildFlight()
 		Name = "CargoBay",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(0, 54),
+		Size = UDim2.fromOffset(0, 58),
 		AutomaticSize = Enum.AutomaticSize.X,
 		Parent = flightFrame,
 	}, C.cyan, false)
 	local cargoContent = make("Frame", {
 		Name = "Content",
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(0, 54),
+		Size = UDim2.fromOffset(0, 58),
 		AutomaticSize = Enum.AutomaticSize.X,
 		Parent = cargoPanel,
 	}, {
@@ -489,25 +489,25 @@ local function buildFlight()
 
 	local cargoMeta = make("Frame", {
 		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(72, 34),
+		Size = UDim2.fromOffset(86, 40),
 		LayoutOrder = 1,
 		Parent = cargoContent,
 	})
 	buildCargoIcon(cargoMeta, UDim2.fromOffset(0, 2))
 	label({
 		Text = "CARGO",
-		TextSize = 10,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(20, 2),
-		Size = UDim2.fromOffset(52, 13),
+		Position = UDim2.fromOffset(20, 0),
+		Size = UDim2.fromOffset(66, 18),
 		Parent = cargoMeta,
 	})
 	refs.cargoCount = label({
 		Text = "0 / 5",
-		TextSize = 14,
+		TextSize = 16,
 		TextColor3 = C.fg,
-		Position = UDim2.fromOffset(0, 17),
-		Size = UDim2.fromOffset(72, 17),
+		Position = UDim2.fromOffset(0, 20),
+		Size = UDim2.fromOffset(86, 18),
 		Parent = cargoMeta,
 	})
 
@@ -595,11 +595,11 @@ local function buildFlight()
 	})
 	label({
 		Text = "ENTERING SECTOR",
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(0, 10),
-		Size = UDim2.new(1, 0, 0, 16),
+		Position = UDim2.fromOffset(0, 8),
+		Size = UDim2.new(1, 0, 0, 20),
 		Parent = bannerFrame,
 	})
 	refs.bannerName = label({
@@ -608,7 +608,7 @@ local function buildFlight()
 		TextSize = 32,
 		TextColor3 = C.fg,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(0, 28),
+		Position = UDim2.fromOffset(0, 30),
 		Size = UDim2.new(1, 0, 0, 40),
 		TextStrokeTransparency = 0.65,
 		Parent = bannerFrame,
@@ -620,7 +620,7 @@ local function buildFlight()
 		Text = "",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -16, 1, -12),
-		Size = UDim2.fromOffset(156, 68),
+		Size = UDim2.fromOffset(172, 68),
 		BackgroundTransparency = 0.14,
 		Parent = flightFrame,
 	}, C.panel, C.cyan)
@@ -631,21 +631,21 @@ local function buildFlight()
 	})
 	addTopSheen(recall, C.cyan, 2)
 	label({
-		Text = "RETURN TO BASE",
+		Text = "TO BASE",
 		Font = FONT_BODY,
-		TextSize = 10,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(14, 14),
-		Size = UDim2.fromOffset(100, 13),
+		Position = UDim2.fromOffset(14, 10),
+		Size = UDim2.fromOffset(104, 18),
 		Parent = recall,
 	})
 	label({
 		Text = "RECALL",
 		Font = FONT_HEAVY,
-		TextSize = 19,
+		TextSize = 20,
 		TextColor3 = C.fg,
-		Position = UDim2.fromOffset(14, 28),
-		Size = UDim2.fromOffset(96, 24),
+		Position = UDim2.fromOffset(14, 30),
+		Size = UDim2.fromOffset(104, 24),
 		Parent = recall,
 	})
 	-- Keycap badge (R)
@@ -653,7 +653,7 @@ local function buildFlight()
 		Name = "Keycap",
 		AnchorPoint = Vector2.new(1, 0.5),
 		Position = UDim2.new(1, -12, 0.5, 0),
-		Size = UDim2.fromOffset(30, 30),
+		Size = UDim2.fromOffset(32, 32),
 		BackgroundColor3 = C.inset,
 		BorderSizePixel = 0,
 		Parent = recall,
@@ -664,7 +664,7 @@ local function buildFlight()
 	})
 	label({
 		Text = "R",
-		TextSize = 15,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Size = UDim2.fromScale(1, 1),
@@ -713,7 +713,7 @@ local function buildWarning()
 		Name = "Warning",
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 0, 12),
-		Size = UDim2.fromOffset(0, 40),
+		Size = UDim2.fromOffset(0, 42),
 		AutomaticSize = Enum.AutomaticSize.X,
 		BackgroundColor3 = C.panel,
 		BackgroundTransparency = 0.12,
@@ -742,7 +742,7 @@ local function buildWarning()
 		Name = "Badge",
 		BackgroundColor3 = C.cyan,
 		BorderSizePixel = 0,
-		Size = UDim2.fromOffset(22, 22),
+		Size = UDim2.fromOffset(24, 24),
 		LayoutOrder = 1,
 		Parent = warningFrame,
 	}, {
@@ -752,7 +752,7 @@ local function buildWarning()
 	label({
 		Text = "!",
 		Font = FONT_HEAVY,
-		TextSize = 15,
+		TextSize = 16,
 		TextColor3 = C.cyanDark,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Size = UDim2.fromScale(1, 1),
@@ -762,7 +762,7 @@ local function buildWarning()
 	refs.warnText = label({
 		Text = "",
 		Font = FONT_HEAVY,
-		TextSize = 15,
+		TextSize = 16,
 		TextColor3 = C.fg,
 		AutomaticSize = Enum.AutomaticSize.X,
 		Size = UDim2.fromScale(0, 1),
@@ -786,45 +786,45 @@ local function buildBase()
 		Name = "Wallet",
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, -16, 0, 12),
-		Size = UDim2.fromOffset(248, 72),
+		Size = UDim2.fromOffset(272, 88),
 		Parent = baseFrame,
 	}, C.cyan, true)
 	label({
 		Text = "CREDITS",
-		TextSize = 10,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(14, 9),
-		Size = UDim2.new(1, -28, 0, 12),
+		Position = UDim2.fromOffset(14, 10),
+		Size = UDim2.new(1, -28, 0, 18),
 		Parent = wallet,
 	})
 	refs.coins = label({
 		Text = "0 coins",
 		Font = FONT_HEAVY,
-		TextSize = 21,
+		TextSize = 22,
 		TextColor3 = C.amber,
-		Position = UDim2.fromOffset(14, 22),
-		Size = UDim2.new(1, -28, 0, 24),
+		Position = UDim2.fromOffset(14, 30),
+		Size = UDim2.new(1, -28, 0, 26),
 		Parent = wallet,
 	})
 	refs.owned = label({
 		Text = "0 creatures caught",
 		Font = FONT_BODY,
-		TextSize = 12,
+		TextSize = 16,
 		TextColor3 = C.muted,
-		Position = UDim2.fromOffset(14, 48),
-		Size = UDim2.new(1, -28, 0, 16),
+		Position = UDim2.fromOffset(14, 58),
+		Size = UDim2.new(1, -28, 0, 20),
 		Parent = wallet,
 	})
 
-	-- Keep exact path HUD.Base.Launch
+	-- Keep exact path HUD.Base.Launch (>= 44px even at 0.65 mobile UIScale -> 70px logical)
 	local launchBtn = button({
 		Name = "Launch",
 		Text = "LAUNCH",
 		Font = FONT_HEAVY,
 		TextSize = 24,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -38),
-		Size = UDim2.fromOffset(264, 62),
+		Position = UDim2.new(0.5, 0, 1, -48),
+		Size = UDim2.fromOffset(264, 70),
 		TextColor3 = C.cyanDark,
 		Parent = baseFrame,
 	}, C.cyan, Color3.fromRGB(165, 238, 255))
@@ -840,7 +840,7 @@ local function buildBase()
 		Name = "LaunchSub",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -12),
-		Size = UDim2.fromOffset(196, 20),
+		Size = UDim2.fromOffset(248, 28),
 		BackgroundColor3 = C.panel,
 		BackgroundTransparency = 0.25,
 		BorderSizePixel = 0,
@@ -852,7 +852,7 @@ local function buildBase()
 	refs.launchSub = label({
 		Text = "CHAPTER 1  ·  EARTH",
 		Font = FONT,
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Size = UDim2.fromScale(1, 1),
@@ -875,7 +875,7 @@ local function buildResults()
 		Name = "Card",
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.fromScale(0.5, 0.5),
-		Size = UDim2.fromOffset(448, 400),
+		Size = UDim2.fromOffset(468, 432),
 		BackgroundTransparency = 0.08,
 		ZIndex = 21,
 		Parent = resultsFrame,
@@ -884,11 +884,11 @@ local function buildResults()
 
 	label({
 		Text = "MISSION DEBRIEF",
-		TextSize = 11,
+		TextSize = 16,
 		TextColor3 = C.cyan,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Position = UDim2.fromOffset(0, 14),
-		Size = UDim2.new(1, 0, 0, 14),
+		Size = UDim2.new(1, 0, 0, 18),
 		ZIndex = 22,
 		Parent = card,
 	})
@@ -897,7 +897,7 @@ local function buildResults()
 		Font = FONT_HEAVY,
 		TextSize = 24,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		Position = UDim2.fromOffset(16, 30),
+		Position = UDim2.fromOffset(16, 34),
 		Size = UDim2.new(1, -32, 0, 30),
 		ZIndex = 22,
 		Parent = card,
@@ -906,7 +906,7 @@ local function buildResults()
 		BackgroundColor3 = C.cyan,
 		BackgroundTransparency = 0.78,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(24, 68),
+		Position = UDim2.fromOffset(24, 70),
 		Size = UDim2.new(1, -48, 0, 1),
 		ZIndex = 22,
 		Parent = card,
@@ -915,8 +915,8 @@ local function buildResults()
 	refs.resList = make("ScrollingFrame", {
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		Position = UDim2.fromOffset(24, 78),
-		Size = UDim2.new(1, -48, 1, -200),
+		Position = UDim2.fromOffset(24, 80),
+		Size = UDim2.new(1, -48, 1, -236),
 		CanvasSize = UDim2.new(),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		ScrollBarThickness = 4,
@@ -931,8 +931,8 @@ local function buildResults()
 		BackgroundColor3 = C.inset,
 		BackgroundTransparency = 0.25,
 		BorderSizePixel = 0,
-		Position = UDim2.new(0, 24, 1, -114),
-		Size = UDim2.new(1, -48, 0, 44),
+		Position = UDim2.new(0, 24, 1, -148),
+		Size = UDim2.new(1, -48, 0, 50),
 		ZIndex = 22,
 		Parent = card,
 	}, {
@@ -942,7 +942,7 @@ local function buildResults()
 	refs.resTotal = label({
 		Text = "",
 		Font = FONT_BODY,
-		TextSize = 13,
+		TextSize = 16,
 		TextWrapped = true,
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Position = UDim2.fromOffset(10, 2),
@@ -951,14 +951,14 @@ local function buildResults()
 		Parent = totalBox,
 	})
 
-	-- Keep exact path HUD.Results.Card.TextButton (default Name = "TextButton")
+	-- Keep exact path HUD.Results.Card.TextButton (>= 44px even at 0.65 mobile UIScale -> 70px logical)
 	refs.resContinue = button({
 		Text = "CONTINUE",
 		Font = FONT_HEAVY,
-		TextSize = 17,
+		TextSize = 18,
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -16),
-		Size = UDim2.fromOffset(212, 46),
+		Size = UDim2.fromOffset(224, 70),
 		TextColor3 = C.cyanDark,
 		ZIndex = 22,
 		Parent = card,
@@ -1016,10 +1016,10 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 		label({
 			Text = z.name,
 			Font = FONT_BODY,
-			TextSize = 11,
+			TextSize = 16,
 			TextColor3 = C.fg,
-			Position = UDim2.new(0, 18, yOf((z.from + z.to) / 2), -7),
-			Size = UDim2.new(1, -18, 0, 14),
+			Position = UDim2.new(0, 18, yOf((z.from + z.to) / 2), -9),
+			Size = UDim2.new(1, -18, 0, 18),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 2,
 			Parent = track,
@@ -1037,14 +1037,16 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 		ZIndex = 4,
 		Parent = track,
 	})
-	local tagOffset = if limY < 0.12 then 4 else -14
+	local tagOffset = if limY < 0.16 then 4 else -20
 	label({
 		Text = "MAX LIMIT",
-		TextSize = 9,
+		TextSize = 16,
 		TextColor3 = C.danger,
+		TextStrokeColor3 = C.panel,
+		TextStrokeTransparency = 0.35,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Position = UDim2.new(0, 0, limY, tagOffset),
-		Size = UDim2.new(1, 0, 0, 11),
+		Size = UDim2.new(1, 0, 0, 18),
 		ZIndex = 4,
 		Parent = track,
 	})
@@ -1372,7 +1374,7 @@ end
 
 function HUDController.toast(text: string, color: Color3?, big: boolean?)
 	local accent = color or C.cyan
-	local size = if big then 20 else 15
+	local size = if big then 20 else 16
 	local t = make("Frame", {
 		BackgroundColor3 = C.panel,
 		BackgroundTransparency = 0.14,
@@ -1532,10 +1534,10 @@ function HUDController.showResults(results: any, onContinue: () -> ())
 		label({
 			Text = "No creatures caught this run",
 			Font = FONT_BODY,
-			TextSize = 14,
+			TextSize = 16,
 			TextColor3 = C.muted,
 			TextXAlignment = Enum.TextXAlignment.Center,
-			Size = UDim2.new(1, 0, 0, 32),
+			Size = UDim2.new(1, 0, 0, 34),
 			ZIndex = 23,
 			Parent = list,
 		})
@@ -1548,7 +1550,7 @@ function HUDController.showResults(results: any, onContinue: () -> ())
 			BackgroundColor3 = C.inset,
 			BackgroundTransparency = 0.3,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, -6, 0, 30),
+			Size = UDim2.new(1, -6, 0, 34),
 			LayoutOrder = i,
 			ZIndex = 23,
 			Parent = list,
@@ -1575,7 +1577,7 @@ function HUDController.showResults(results: any, onContinue: () -> ())
 		end
 		label({
 			Text = name,
-			TextSize = 14,
+			TextSize = 16,
 			TextColor3 = rarity.color,
 			Position = UDim2.fromOffset(14, 0),
 			Size = UDim2.new(0.72, -14, 1, 0),
@@ -1586,7 +1588,7 @@ function HUDController.showResults(results: any, onContinue: () -> ())
 		label({
 			Text = NumberFormat.short(g.value),
 			Font = FONT,
-			TextSize = 14,
+			TextSize = 16,
 			TextColor3 = C.amber,
 			TextXAlignment = Enum.TextXAlignment.Right,
 			Position = UDim2.fromScale(0.72, 0),
@@ -1651,7 +1653,7 @@ function HUDController.init()
 		Name = "Toasts",
 		BackgroundTransparency = 1,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -78),
+		Position = UDim2.new(0.5, 0, 1, -80),
 		Size = UDim2.fromOffset(620, 180),
 		Parent = gui,
 	}, {
