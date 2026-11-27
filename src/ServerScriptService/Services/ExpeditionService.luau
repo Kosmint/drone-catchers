@@ -21,6 +21,7 @@ local Rarities = require(Shared.Config.Rarities)
 local Modifiers = require(Shared.Config.Modifiers)
 local Stats = require(Shared.Stats)
 local SpawnGen = require(Shared.SpawnGen)
+local SpawnWindow = require(Shared.SpawnWindow)
 local EpicBlink = require(Shared.EpicBlink)
 local DataService = require(script.Parent.DataService)
 local DebugService = require(script.Parent.DebugService)
@@ -36,10 +37,12 @@ type Run = {
 	plan: SpawnGen.Plan,
 	startedAt: number,
 	caught: { [number]: boolean },
-	caughtInZone: { [string]: number },
+	nextIndex: { [string]: number }, -- per zone: first queue index the client hasn't activated (SpawnWindow)
 	cargo: { CargoItem },
 	lastCatchAt: number,
 	lastGroup: number,
+	burstStart: number, -- first catch of the current same-group burst (swarm multi-pull)
+	burstCount: number, -- catches in that burst
 }
 
 local ExpeditionService = {}
@@ -48,6 +51,8 @@ local runs: { [Player]: Run } = {}
 local lastLaunch: { [Player]: number } = {}
 local rng = Random.new()
 local nextRunId = 0
+-- swarm members pulled together by one beam finish within this many seconds of each other
+local SWARM_BURST_WINDOW = 0.3
 
 ----------------------------------------------------------------------------
 -- rolls (server RNG only)
@@ -163,19 +168,27 @@ local function onRequestLaunch(player: Player, chapterId: unknown)
 	local seed = rng:NextInteger(1, 2 ^ 31 - 2)
 	local stats = Stats.drone(data)
 	local maxAltitude = Stats.maxAltitude(data, chapter)
+	local plan = SpawnGen.build(seed, chapter, maxAltitude)
+	local nextIndex: { [string]: number } = {}
+	for _, zp in plan.zones do
+		-- same deploy activation as CreatureSimClient.begin
+		nextIndex[zp.zone] = SpawnWindow.initial(zp.queue, zp.active)
+	end
 	local run: Run = {
 		id = nextRunId,
 		seed = seed,
 		chapter = chapter,
 		maxAltitude = maxAltitude,
 		stats = stats,
-		plan = SpawnGen.build(seed, chapter, maxAltitude),
+		plan = plan,
 		startedAt = os.clock(),
 		caught = {},
-		caughtInZone = {},
+		nextIndex = nextIndex,
 		cargo = {},
 		lastCatchAt = -math.huge,
 		lastGroup = -1,
+		burstStart = -math.huge,
+		burstCount = 0,
 	}
 	runs[player] = run
 	lastLaunch[player] = os.clock()
@@ -190,10 +203,11 @@ local function onReportCatch(player: Player, runId: unknown, spawnId: unknown)
 	if not spawn or run.caught[spawn.id] then return { ok = false, reason = "gone" } end
 	if #run.cargo >= run.stats.cargo then return { ok = false, reason = "full" } end
 
-	-- could this creature really be in the sky yet?
+	-- could this creature really be in the sky yet? (the client activates whole groups,
+	-- one group per catch in the zone; swarmMax = slack for timing)
 	local zp = zonePlan(run, spawn.zone)
-	local caughtHere = run.caughtInZone[spawn.zone] or 0
-	if not zp or spawn.index > zp.active + caughtHere + Balance.spawns.swarmMax then
+	local nextIndex = run.nextIndex[spawn.zone]
+	if not zp or not nextIndex or not SpawnWindow.allows(spawn.index, nextIndex, Balance.spawns.swarmMax) then
 		return { ok = false, reason = "inactive" }
 	end
 
@@ -203,7 +217,12 @@ local function onReportCatch(player: Player, runId: unknown, spawnId: unknown)
 	local rarity = Rarities.byId[creature.rarity]
 	if now - run.startedAt < 1 then return { ok = false, reason = "early" } end
 	local gap = math.max(Balance.expedition.minCatchGap, rarity.resist / run.stats.beamStrength * Balance.expedition.resistGapFactor)
-	if spawn.group == run.lastGroup then gap = 0.1 end -- swarm members are pulled together
+	-- swarm multi-pull: up to swarmMultiPull members of one group, pulled by the same beam,
+	-- finish together; they need no gap within SWARM_BURST_WINDOW of the burst's first catch
+	local inBurst = spawn.group == run.lastGroup
+		and run.burstCount < Balance.beam.swarmMultiPull
+		and now - run.burstStart <= SWARM_BURST_WINDOW
+	if inBurst then gap = 0 end
 	if now - run.lastCatchAt < gap then return { ok = false, reason = "fast" } end
 	if EpicBlink.applies(rarity.id) then
 		-- Epics blink away while pulled (count from the run seed, never from the client):
@@ -217,9 +236,14 @@ local function onReportCatch(player: Player, runId: unknown, spawnId: unknown)
 	end
 
 	run.caught[spawn.id] = true
-	run.caughtInZone[spawn.zone] = caughtHere + 1
+	run.nextIndex[spawn.zone] = SpawnWindow.advance(zp.queue, nextIndex) -- mirrors CreatureSimClient.activateNext
 	run.lastCatchAt = now
 	run.lastGroup = spawn.group
+	if inBurst then
+		run.burstCount += 1
+	else
+		run.burstStart, run.burstCount = now, 1
+	end
 
 	local modifiers = rollModifiers(run.chapter)
 	local size = rollSize()
