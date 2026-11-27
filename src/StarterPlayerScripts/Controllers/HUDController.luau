@@ -60,6 +60,7 @@ local WARN_PULSE = TweenInfo.new(0.26, Enum.EasingStyle.Sine, Enum.EasingDirecti
 
 local gui: ScreenGui
 local flightFrame: Frame
+local scannerLayer: Frame
 local baseFrame: Frame
 local resultsFrame: Frame
 local fadeFrame: Frame
@@ -277,6 +278,15 @@ local function buildFlight()
 		Size = UDim2.fromScale(1, 1),
 		Visible = false,
 		Parent = gui,
+	})
+
+	-- 0) Scanner layer (behind HUD panels, leaves center free for ring & blips)
+	scannerLayer = make("Frame", {
+		Name = "Scanner",
+		BackgroundTransparency = 1,
+		Size = UDim2.fromScale(1, 1),
+		ZIndex = 0,
+		Parent = flightFrame,
 	})
 
 	-- 1) Top-left Telemetry Status (Battery + Hull)
@@ -1462,6 +1472,10 @@ function HUDController.beginFlight(run: any)
 		stStroke.Color = C.cyan
 		stStroke.Transparency = 0.58
 	end
+end
+
+function HUDController.scannerLayer(): Frame
+	return scannerLayer
 end
 
 function HUDController.setMode(m: string)

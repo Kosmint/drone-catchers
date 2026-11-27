@@ -24,6 +24,7 @@ local HUDController = require(Controllers.HUDController)
 local SkyController = require(Controllers.SkyController)
 local CatchEvents = require(Controllers.CatchEvents)
 local TimeScale = require(Controllers.TimeScale)
+local ScannerController = require(Controllers.ScannerController)
 
 local player = Players.LocalPlayer
 local ORIGIN = Balance.flight.origin
@@ -93,6 +94,7 @@ local function stepFlight(rawDt: number)
 	local camPos = workspace.CurrentCamera.CFrame.Position
 	local speed = math.sqrt(fs.vx * fs.vx + fs.vy * fs.vy)
 	CreatureSimClient.update(dt, fs.x, fs.y, speed, nozzle, camPos.X - ORIGIN.X, camPos.Y - ORIGIN.Y)
+	ScannerController.update(dt, fs, run)
 
 	hudTimer -= rawDt
 	if hudTimer <= 0 then
