@@ -18,7 +18,8 @@
 param(
     [int]$IntervalMinutes = 60,
     [int]$TimeoutMinutes = 50,
-    [string]$Model = '',
+    [string]$Model = '',          # normal tier: agy's default model unless you set one here
+    [string]$StrongModel = '',    # model:guclu tier: --effort high, plus this model when set
     [switch]$Once
 )
 
@@ -26,6 +27,10 @@ $ErrorActionPreference = 'Stop'
 $Utf8 = New-Object System.Text.UTF8Encoding $false
 [Console]::OutputEncoding = $Utf8
 $Helpers = @('Kosmint', 'Cagan2112')
+# Only these people's comments and reviews wake a helper and count as instructions.
+# Everyone else's text is untrusted data (helper.md says the same to the agent).
+$Team = @('muhammet842', 'Kosmint', 'Cagan2112')
+$StrongLabel = 'model:guclu'
 $MaxContinueRuns = 3          # stop re-running an unfinished Issue after this many runs with no new comments
 $PromptName = '.agy-helper-prompt.md'   # written in the clone, hidden from git via .git/info/exclude
 $CmdFileName = '.agy-cmd.txt'           # the agent writes its git/gh command here, also hidden from git
@@ -66,8 +71,14 @@ function New-Event($By, $At, $Body) {
     return [pscustomobject]@{ By = [string]$By; At = [datetime]$At; Body = [string]$Body }
 }
 
+function Test-TeamMember([string]$Login) {
+    # GitHub logins are case-insensitive; -contains compares case-insensitively.
+    return [bool]($Login -and ($Team -contains $Login))
+}
+
 function Get-Activity([int]$Issue, $Pr) {
-    # All comments and reviews on the Issue and its PR, oldest first. '#nobot' comments are ignored.
+    # Team members' comments and reviews on the Issue and its PR, oldest first.
+    # '#nobot' comments and anything written by people outside the team (or bots) are ignored.
     $events = New-Object System.Collections.Generic.List[object]
     $iv = Invoke-Gh @('issue', 'view', "$Issue", '--json', 'comments')
     foreach ($c in @($iv.comments)) { if ($c) { $events.Add((New-Event $c.author.login $c.createdAt $c.body)) } }
@@ -80,7 +91,7 @@ function Get-Activity([int]$Issue, $Pr) {
         $inline = Invoke-Gh @('api', "repos/{owner}/{repo}/pulls/$($Pr.number)/comments")
         foreach ($c in @($inline)) { if ($c) { $events.Add((New-Event $c.user.login $c.created_at $c.body)) } }
     }
-    return @($events | Where-Object { $_.Body -notmatch '#nobot' } | Sort-Object At)
+    return @($events | Where-Object { (Test-TeamMember $_.By) -and $_.Body -notmatch '#nobot' } | Sort-Object At)
 }
 
 function Find-Work {
@@ -120,7 +131,9 @@ function Find-Work {
         }
 
         if ($trigger) {
-            return [pscustomobject]@{ Issue = $i.number; Title = $i.title; Pr = $pr; Trigger = $trigger }
+            $tier = 'normal'
+            if ($labels -contains $StrongLabel) { $tier = 'guclu' }
+            return [pscustomobject]@{ Issue = $i.number; Title = $i.title; Pr = $pr; Trigger = $trigger; Tier = $tier }
         }
     }
     return $null
@@ -189,11 +202,26 @@ function Set-AgySettings([string]$Workspace) {
     [System.IO.File]::WriteAllText($file, ($obj | ConvertTo-Json -Depth 20), $Utf8)
 }
 
-function Invoke-Agy([string]$PromptText, [string]$LogPath, [int]$Minutes) {
+function Get-TierArgs([string]$Tier) {
+    # Extra agy arguments for a model tier (AUTOMATION.md "Model tiers").
+    #   normal: agy's default model, or -Model when set.
+    #   guclu:  --effort high, plus -StrongModel when set (else -Model when set).
+    $parts = @()
+    if ($Tier -eq 'guclu') {
+        $parts += '--effort high'
+        if ($StrongModel) { $parts += ('--model "{0}"' -f $StrongModel) }
+        elseif ($Model) { $parts += ('--model "{0}"' -f $Model) }
+    } elseif ($Model) {
+        $parts += ('--model "{0}"' -f $Model)
+    }
+    if ($parts.Count -eq 0) { return '' }
+    return (($parts -join ' ') + ' ')
+}
+
+function Invoke-Agy([string]$PromptText, [string]$LogPath, [int]$Minutes, [string]$Tier = 'normal') {
     # Runs agy headless in the clone with the prompt from $PromptName. Returns the exit code (or $null on time-out).
     [System.IO.File]::WriteAllText((Join-Path $script:Root $PromptName), $PromptText, $Utf8)
-    $modelArg = ''
-    if ($Model) { $modelArg = "--model `"$Model`" " }
+    $modelArg = Get-TierArgs $Tier
     $cmdLine = '"{0}" {1}--mode accept-edits --print-timeout {2}m -p "Read the file {3} in this folder and follow its instructions exactly." > "{4}" 2>&1' -f `
         $script:Agy, $modelArg, $Minutes, $PromptName, $LogPath
     $proc = Start-Process -FilePath $env:ComSpec -ArgumentList @('/d', '/s', '/c', "`"$cmdLine`"") -NoNewWindow -PassThru
@@ -218,7 +246,7 @@ function Get-GateNote {
         '',
         'Its output is the output of your git/gh command, followed by `[exit N]`. `REFUSED: ...` means the gate blocks that command; do not try to get around it.',
         "Put long text in a file and pass it by path: ``git commit -F <file>``, ``gh pr create --body-file <file>``, ``gh issue comment <n> --body-file <file>``, ``gh pr comment <n> --body-file <file>``.",
-        "``gh api`` is GET only. Use plain ASCII for titles and short messages. Do not commit ``$CmdFileName`` or ``$PromptName`` (they are hidden from git). Do not create other scripts.",
+        "``gh`` only works on Kosmint/drone-catchers. ``gh api`` is GET only and only for paths written out in full, e.g. ``repos/Kosmint/drone-catchers/pulls/<n>/comments`` (not ``{owner}/{repo}``). ``gh pr review`` and ``gh pr merge`` are refused. git allows only: status, add, commit, push, fetch, pull, checkout, switch, branch, log, diff, show, rev-parse, restore, rm, mv, merge, rebase --continue/--abort, ls-files. Use plain ASCII for titles and short messages. Do not commit ``$CmdFileName`` or ``$PromptName`` (they are hidden from git). Do not create other scripts.",
         ''
     ) -join "`n"
 }
@@ -259,14 +287,15 @@ function Invoke-HelperRun($Work) {
         "- Pull request: $prText",
         "- Branch: $branchText",
         "- Trigger: $trigger",
+        "- Model tier: $($Work.Tier)",
         ''
     ) -join "`n"
     # Always the instructions from main, so a branch can't rewrite its own prompt.
     $instructions = (git show 'origin/main:.github/agents/helper.md') -join "`n"
 
     $runLog = Join-Path $LogDir ('issue{0}-{1}.log' -f $Work.Issue, (Get-Date -Format 'yyyyMMdd-HHmmss'))
-    Write-Log ("Issue #{0} ({1}): starting agy, trigger {2}. Log: {3}" -f $Work.Issue, $Work.Title, $Work.Trigger, $runLog)
-    $code = Invoke-Agy ($header + "`n" + (Get-GateNote) + "`n" + $instructions + "`n") $runLog $TimeoutMinutes
+    Write-Log ("Issue #{0} ({1}): starting agy, trigger {2}, tier {3}. Log: {4}" -f $Work.Issue, $Work.Title, $Work.Trigger, $Work.Tier, $runLog)
+    $code = Invoke-Agy ($header + "`n" + (Get-GateNote) + "`n" + $instructions + "`n") $runLog $TimeoutMinutes $Work.Tier
     if ($null -eq $code) {
         Write-Log ("Issue #{0}: agy timed out after {1} minutes and was stopped." -f $Work.Issue, $TimeoutMinutes)
     } elseif ($code -ne 0) {

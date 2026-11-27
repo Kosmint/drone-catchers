@@ -37,8 +37,12 @@ Files: `.github/workflows/helper-agents.yml` (cloud trigger, Claude only), `.git
 - **Assigning** the Issue to its human (exactly one assignee and one agent label).
 - A **comment** on that Issue or its PR, or a **review** on its PR (approvals don't count).
   - Cloud Claude: by any team member, starts at once.
-  - Local Gemini: by anyone other than the Gemini's own human, picked up at the next check.
+  - Local Gemini: by a team member other than the Gemini's own human, picked up at the next check.
     (A Gemini's comments are posted under its human's name, starting with `🤖 Gemini:`.)
+
+The team is `muhammet842`, `Kosmint` and `Cagan2112`. Only their comments and reviews wake a helper
+or count as instructions; everything anyone else writes (other accounts, bots) is untrusted data
+(`.github/agents/helper.md`, "Whose words count").
 
 Never: `studio` Issues, Issues assigned to muhammet842, closed Issues, anything labelled
 `otomasyon-durdur`, comments containing `#nobot`, comments by people outside the team.
@@ -54,6 +58,21 @@ comments.
 | `insan-karari` | needs a human decision (design, scope, price) |
 | `lider-onayi` | lead reviewed and tested it; a human should play it and merge |
 | `otomasyon-durdur` | pause helper runs on this Issue or PR |
+| `model:guclu` | use the strong model tier for this Issue (see below); no label = normal tier |
+
+## Model tiers
+The lead adds `model:guclu` before assigning, for: server validation and remote security,
+DataService and the economy, work that joins several systems, complex logic (flight physics,
+deterministic spawns), and work that already failed once on the normal tier. Everything else is
+normal. Strong models cost much more: use them sparingly.
+
+| Tier | Label | Cloud Claude (`helper-agents.yml`) | Local Gemini (`gemini-helper.ps1`) |
+|---|---|---|---|
+| normal | none | `vars.HELPER_CLAUDE_MODEL`, default `claude-sonnet-5-5` | agy's default model (or `-Model`) |
+| strong | `model:guclu` | `vars.HELPER_CLAUDE_MODEL_STRONG`, default `claude-opus-5-5` | `--effort high`, plus `--model $StrongModel` when `-StrongModel` is set (empty for now) |
+
+The route job reads the label and passes the model to the Claude job; the local runner logs the tier
+and adds the arguments itself. Changing the label takes effect on the next run.
 
 ## Safety
 - Only `muhammet842`, `Kosmint` and `Cagan2112` can wake helpers; bots can't (no loops).
@@ -64,10 +83,20 @@ comments.
   line, exactly** (no prefix or wildcard: `command(git)` never matches `git status`), so the runner
   grants ONE exact command: `scripts/agy-git.ps1`, copied to `%LOCALAPPDATA%\drone-catchers-gemini\`
   on every start. The agent writes its command to `.agy-cmd.txt` (line 1 `git` or `gh`, then one
-  argument per line) and runs the gate, which runs only `git`/`gh` directly (no shell) and refuses
-  force push, push to `main`, `git config`, `gh pr merge`, `gh secret`/`variable`/`auth`/`workflow`,
-  labels other than `soru`, assignee changes, non-GET `gh api`, and similar. The runner adds the exact
-  allow rule and some deny rules to `%USERPROFILE%\.geminintigravity-cli\settings.json` (original
+  argument per line) and runs the gate, which runs only `git`/`gh` directly (no shell). The gate:
+  - **gh**: only `Kosmint/drone-catchers` (`-R`/`--repo` and URL arguments are checked); `gh api` is
+    GET-only and only for `repos/Kosmint/drone-catchers/...`; refuses `gh pr review`/`merge`,
+    `release`, `run`, `cache`, `gist`, `secret`, `variable`, `auth`, `workflow`, `label`,
+    `issue delete`/`transfer`/`lock`, labels other than `soru`, assignee changes.
+  - **git**: only `status add commit push fetch pull checkout switch branch log diff show rev-parse
+    restore rm mv merge ls-files` and `rebase --continue`/`--abort` (no aliases); push only
+    `origin gemini/...` or `claude/...`; fetch/pull only from `origin`. It refuses to run when
+    `.git/config` has a `!` alias, `core.fsmonitor`/`hooksPath`/`sshCommand`/`pager`/`editor`,
+    `diff.external`, `filter.*`, `include`/`includeIf` (and similar program-running or redirecting
+    settings, or an `origin` that isn't this repo), or when `.git/hooks` has a non-`.sample` file.
+  - Tests: `powershell -File scripts/tests/Run-Tests.ps1`.
+  The runner adds the exact
+  allow rule and some deny rules to `%USERPROFILE%\.gemini\antigravity-cli\settings.json` (original
   kept as `settings.json.before-drone-catchers`); your other settings stay. The prompt is always read
   from `main`.
 - Humans merge everything.
@@ -79,7 +108,8 @@ comments.
 1. Settings → Actions → General: "Read and write permissions" + "Allow GitHub Actions to create and
    approve pull requests".
 2. Secret `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, Kosmint's subscription).
-3. Variable `AUTOMATION_ENABLED` = `true`. Optional: `HELPER_CLAUDE_MODEL`, `HELPER_MAX_TURNS`.
+3. Variable `AUTOMATION_ENABLED` = `true`. Optional: `HELPER_CLAUDE_MODEL`,
+   `HELPER_CLAUDE_MODEL_STRONG`, `HELPER_MAX_TURNS`.
 
 The Gemini API-key secrets are no longer used: delete `GEMINI_API_KEY_KOSMINT` and
 `GEMINI_API_KEY_CAGAN`, and delete the keys in Google AI Studio.

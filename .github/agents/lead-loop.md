@@ -48,6 +48,11 @@ Only inside a stage the humans have started, and only Issues from the plan they 
   Open the next one when its previous PR has `lider-onayi` or is merged.
 - Write the Issue so a helper can finish it alone: goal, files it owns, contract to use, acceptance
   checks, what to put in the PR. Only open it when its dependencies are merged.
+- **Model tier** (AUTOMATION.md "Model tiers"): add `model:guclu` before assigning when the Issue is
+  server validation or remote security, DataService or the economy, work that joins several systems,
+  complex logic (flight physics, deterministic spawns), or work that already failed once on the
+  normal tier. Everything else stays normal (no label). Strong models are expensive: use them
+  sparingly.
 - Add the agent label first, then assign. **Assigning starts the helper** (Claude at once, Gemini
   within the hour). Give Gemini the work that doesn't block others, since it starts later.
 - Your own work (`studio`, assigned to muhammet842) you do yourself in this session.
