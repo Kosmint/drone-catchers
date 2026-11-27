@@ -94,7 +94,7 @@ and adds the arguments itself. Changing the label takes effect on the next run.
     `.git/config` has a `!` alias, `core.fsmonitor`/`hooksPath`/`sshCommand`/`pager`/`editor`,
     `diff.external`, `filter.*`, `include`/`includeIf` (and similar program-running or redirecting
     settings, or an `origin` that isn't this repo), or when `.git/hooks` has a non-`.sample` file.
-  - Tests: `powershell -File scripts/tests/Run-Tests.ps1`.
+  - Tests: run `rokit install` once (installs `lune`), then `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\tests\Run-Tests.ps1` (runs the PowerShell tests and all `scripts/tests/*.spec.luau` Luau specs).
   The runner adds the exact
   allow rule and some deny rules to `%USERPROFILE%\.gemini\antigravity-cli\settings.json` (original
   kept as `settings.json.before-drone-catchers`); your other settings stay. The prompt is always read
