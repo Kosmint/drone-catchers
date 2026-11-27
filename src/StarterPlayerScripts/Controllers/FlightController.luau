@@ -343,7 +343,7 @@ local function spawnModel()
 			pl.Enabled = false
 			pl.Shadows = false
 			pl.Parent = cap
-			table.insert(navLights, { part = cap, light = pl, color = pair[2] :: Color3, phase = pair[3] :: number, lit = false })
+			table.insert(navLights, { part = cap, light = pl, color = pair[2] :: Color3, phase = pair[3] :: number, lit = true }) -- lit=true forces the first frame to write the dim state
 		end
 	end
 	deployLeft, navT = DEPLOY_TIME, 0
