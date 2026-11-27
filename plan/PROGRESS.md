@@ -53,7 +53,7 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [x] Drone polish (#31 → PR #37): white outline, thruster glow/trail by speed, red/green blinking nav lights, rotor spin-up on deploy.
 - [x] Earth redraw (#30 → PR #36), see above.
 - [~] Mission Control HUD (#24 → PR #38, Çağan/Gemini): waiting for the lead's Studio check.
-- [ ] Catch Card (#23, Kosmint/Gemini): not started yet (Kosmint's Gemini runner off).
+- [~] Catch Card (#23, Kosmint/Claude → PR): slide-in card, spinning creature viewport, rarity gradient, modifier/size chips, T4 shine, T5 bigger card + glow, queue, 4 s auto-close. Waiting for the lead's Studio check; then turn off the T3+ toast.
 - [ ] Scanner (#29, Çağan/Gemini): after the HUD.
 - [ ] Mobile check (#32, lead): last.
 - Open questions for the humans: drone size (~11% of the screen height; bigger = more readable, but moves the beam nozzle); T5 pink screen and disc-looking rings (#35) to judge while playing.
