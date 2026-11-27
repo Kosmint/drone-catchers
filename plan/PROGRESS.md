@@ -46,7 +46,7 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [ ] Sun glow / lens flare overlay; painted floating clouds near the action plane; painted-layer transitions between zones
 - [ ] 3D low-poly Earth curve at Edge of Space (may become part of the painted Edge set)
 - [ ] Final Mission Control HUD (user: current one "AI-ish and simple")
-- [ ] Beam VFX, catch animation (squash/stretch, intake flash), celebration tiers T0–T5 + Catch Card
+- [~] Beam VFX (#22, PR open, needs Studio check); catch animation (squash/stretch, intake flash), celebration tiers T0–T5 + Catch Card
 - [ ] Scanner ("?" edge blips, Hidden reveal)
 - [ ] Drone polish (thruster glow, lights, deploy anim)
 - [ ] Mobile HUD check (Device Simulator)

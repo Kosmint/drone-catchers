@@ -32,6 +32,8 @@ jobs:
       pr: ${{ steps.route.outputs.pr }}
       branch: ${{ steps.route.outputs.branch }}
       trigger: ${{ steps.route.outputs.trigger }}
+      model: ${{ steps.route.outputs.model }}
+      tier: ${{ steps.route.outputs.tier }}
     steps:
       - name: Decide which helper (if any) should run
         id: route
@@ -50,6 +52,9 @@ jobs:
           REVIEW_STATE: ${{ github.event.review.state }}
           COMMENT_BODY: ${{ github.event.comment.body }}
           REVIEW_BODY: ${{ github.event.review.body }}
+          # Model tiers (AUTOMATION.md "Model tiers"): Issue label model:guclu = strong, no label = normal.
+          MODEL_NORMAL: ${{ vars.HELPER_CLAUDE_MODEL || 'claude-sonnet-5-5' }}
+          MODEL_STRONG: ${{ vars.HELPER_CLAUDE_MODEL_STRONG || 'claude-opus-5-5' }}
         run: |
           set -euo pipefail
           out()  { echo "$1=$2" >> "$GITHUB_OUTPUT"; }
@@ -107,9 +112,15 @@ jobs:
             fi
           fi
 
-          echo "Run $AGENT helper for $OWNER on Issue #$NUM (trigger: $TRIGGER, PR: ${PR:-none}, branch: ${BRANCH:-new})"
+          TIER=normal; MODEL="$MODEL_NORMAL"
+          if has model:guclu; then TIER=guclu; MODEL="$MODEL_STRONG"; fi
+          # The model id goes into the CLI arguments: allow plain model ids only.
+          printf '%s' "$MODEL" | grep -qE '^[A-Za-z0-9._:-]+$' || skip "model id '$MODEL' has unexpected characters"
+
+          echo "Run $AGENT helper for $OWNER on Issue #$NUM (trigger: $TRIGGER, PR: ${PR:-none}, branch: ${BRANCH:-new}, tier: $TIER, model: $MODEL)"
           out run true; out agent "$AGENT"; out owner "$OWNER"; out issue "$NUM"
           out pr "$PR"; out branch "$BRANCH"; out trigger "$TRIGGER"
+          out model "$MODEL"; out tier "$TIER"
 
   claude:
     needs: route
@@ -168,7 +179,7 @@ jobs:
           github_token: ${{ github.token }}
           prompt: ${{ steps.prompt.outputs.text }}
           claude_args: >-
-            --model ${{ vars.HELPER_CLAUDE_MODEL || 'claude-sonnet-5-5' }}
+            --model ${{ needs.route.outputs.model }}
             --max-turns ${{ vars.HELPER_MAX_TURNS || '80' }}
             --allowedTools "Bash(git:*),Bash(gh:*),Edit,Write,Read,Glob,Grep"
 

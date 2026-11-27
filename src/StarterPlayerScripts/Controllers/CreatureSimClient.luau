@@ -451,7 +451,13 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 				stretchPitch = math.sin(u * math.pi) * 0.5
 				stretchRoll = u * u * 5
 			end
-			local wobble = if l.beamed then math.sin(l.ph * 30) * 0.08 * l.progress else 0
+			-- beamed: faster, bigger wobble as the pull locks in + a small lean toward the drone
+			local wobble = 0
+			if l.beamed then
+				local pr = math.clamp(l.progress, 0, 1)
+				local lean = math.clamp(math.atan2(droneY - l.y, math.max(math.abs(droneX - l.x), 2)), -0.6, 0.6)
+				wobble = math.sin(l.ph * (30 + 25 * pr)) * (0.04 + 0.08 * pr) * pr + lean * 0.25 * pr
+			end
 			local cf = CFrame.new(ORIGIN.X + l.x, ORIGIN.Y + l.y + bob, ORIGIN.Z)
 				* CAM_PITCH
 				* CFrame.Angles(0, l.yaw, 0)
