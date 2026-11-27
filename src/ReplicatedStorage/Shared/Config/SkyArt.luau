@@ -24,11 +24,16 @@ SkyArt.planet = { image = "rbxassetid://90963176051461", pxW = 512, pxH = 300, r
 -- moon: image 240x240, radius 110 px
 SkyArt.moon = { image = "rbxassetid://91573281865447", pxW = 240, pxH = 240, radiusPx = 110 }
 -- Earth cap: faceted low-poly globe in two tiles (left, right) of 990x607 px; together they cover
--- 2642 x 810 units, the curve top sits 90 units below the image top (rim glow above)
+-- 2642 x 810 units, the curve top sits 90 units below the image top (rim glow above).
+-- As altitude climbs from altStart to altEnd, the Earth sinks from filling fillStart of the
+-- screen height down to fillEnd and shrinks from scaleStart to scaleEnd so the curve looks rounder.
 SkyArt.earth = {
 	images = { "rbxassetid://131693576054567", "rbxassetid://125587510005507" },
 	pxW = 1980, pxH = 607,
 	unitsW = 2642.5, unitsH = 810, topU = 90, radius = 1500,
+	altStart = 3700, altEnd = 6000,
+	fillStart = 0.37, fillEnd = 0.20,
+	scaleStart = 1.0, scaleEnd = 0.72,
 }
 SkyArt.sunGlow = "rbxassetid://72749050278410"
 -- far mountains (demo depth 0.3): 4 tiles of 1300 units from x = -2600, heights +380 .. -340 units
