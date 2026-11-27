@@ -17,6 +17,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local Shared = ReplicatedStorage.Shared
 local Modifiers = require(Shared.Config.Modifiers)
@@ -31,6 +32,8 @@ local SPIN_SPEED = 0.9 -- rad/s
 local FILL_HEIGHT = 0.66 -- creature fills ~2/3 of the viewport height
 local FILL_WIDTH = 0.9 -- ...unless that would clip it sideways while it spins
 local EDGE_CLEAR = 76 -- px kept free above and below the card (Recall button: 16 + 46 from the bottom)
+local TOUCH_TOP = 0.04 -- touch: the card hangs ~4% below the top edge...
+local TOUCH_BOTTOM = 0.5 -- ...and its bottom stays above half the screen (clear of the BEAM button)
 
 local C = {
 	panel = Color3.fromRGB(11, 18, 32), -- #0B1220
@@ -214,30 +217,41 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 		DisplayOrder = 30, -- above the HUD (10) and the celebration layer (20)
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 	}))
+	-- touch devices: top-right, so the bottom-right touch buttons (BEAM, Recall) stay free
+	local touch = UserInputService.TouchEnabled
 	-- same scale rule as the HUD, so the card reads the same on a phone and a desktop
 	local uiScale = make("UIScale", { Parent = gui })
 	local function rescale()
 		local cam = workspace.CurrentCamera
 		if not cam then return end
 		local v = cam.ViewportSize
-		-- vertically centred, so keep EDGE_CLEAR free top and bottom (clear of the Recall button)
-		local fit = (v.Y - 2 * EDGE_CLEAR) / (h + 40)
-		uiScale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 720, fit), 0.5, 1.35)
+		if touch then
+			-- top-right: the bottom must stay above TOUCH_BOTTOM of the screen; this cap beats the 0.5 floor
+			local cap = (TOUCH_BOTTOM - TOUCH_TOP) * v.Y / h
+			uiScale.Scale = math.min(math.clamp(math.min(v.X / 1280, v.Y / 720), 0.5, 1.35), cap)
+		else
+			-- vertically centred, so keep EDGE_CLEAR free top and bottom (clear of the Recall button)
+			local fit = (v.Y - 2 * EDGE_CLEAR) / (h + 40)
+			uiScale.Scale = math.clamp(math.min(v.X / 1280, v.Y / 720, fit), 0.5, 1.35)
+		end
 	end
 	rescale()
 	if workspace.CurrentCamera then
 		trove:Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), rescale)
 	end
 
-	-- right side, vertically centred: the flight camera centres the drone, so the middle stays free
-	local shown = UDim2.new(0.97, 0, 0.5, 0)
-	local hidden = UDim2.new(1, w + 60, 0.5, 0) -- off the right edge (incl. the T5 halo); slides in from the right
+	-- right side, off the centre: the flight camera centres the drone, so the middle stays free.
+	-- desktop: vertically centred; touch: top-right. Slides in from the right either way.
+	local anchorY = if touch then 0 else 0.5
+	local posY = if touch then TOUCH_TOP else 0.5
+	local shown = UDim2.new(0.97, 0, posY, 0)
+	local hidden = UDim2.new(1, w + 60, posY, 0) -- off the right edge (incl. the T5 halo)
 
 	-- holder slides; the glow (T5) sits behind the card inside it
 	local holder = make("Frame", {
 		Name = "Holder",
 		BackgroundTransparency = 1,
-		AnchorPoint = Vector2.new(1, 0.5),
+		AnchorPoint = Vector2.new(1, anchorY),
 		Position = hidden,
 		Size = UDim2.fromOffset(w, h),
 		Parent = gui,
