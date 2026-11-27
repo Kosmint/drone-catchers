@@ -60,6 +60,21 @@ local nozzle: Attachment? = nil
 local rotors: { Rotor } = {}
 local rotorAngle = 0
 
+-- polish (Stage 2, #31): outline so the drone reads on every sky, thruster glow from speed,
+-- blinking nav lights on the outer rotor caps, rotor spin-up when it deploys
+local THRUST_COLOR = Color3.fromRGB(110, 220, 255)
+local NAV_LEFT = Color3.fromRGB(255, 70, 85)
+local NAV_RIGHT = Color3.fromRGB(80, 255, 150)
+local NAV_PERIOD = 1.1 -- seconds per blink cycle
+local NAV_ON = 0.14 -- seconds lit per cycle
+local DEPLOY_TIME = 0.8
+type NavLight = { part: BasePart, light: PointLight, color: Color3, phase: number }
+local navLights: { NavLight } = {}
+local thrustLight: PointLight? = nil
+local thrustEmitter: ParticleEmitter? = nil
+local deployLeft = 0
+local navT = 0
+
 local POSE = CFrame.Angles(math.rad(14), 0, 0) * CFrame.Angles(0, math.rad(-20), 0) -- tilted toward the camera
 
 -- lighting ------------------------------------------------------------------
@@ -269,6 +284,68 @@ local function spawnModel()
 			})
 		end
 	end
+	-- outline: a thin light rim so the drone stays readable over white clouds and dark space
+	local hl = Instance.new("Highlight")
+	hl.Name = "Outline"
+	hl.FillTransparency = 1
+	hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+	hl.OutlineTransparency = 0.1
+	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.Adornee = m
+	hl.Parent = m
+
+	-- thruster glow under the body (light + soft particles pointing down)
+	local ta = Instance.new("Attachment")
+	ta.Name = "Thruster"
+	ta.Position = Vector3.new(0, -1.25, 0)
+	ta.Parent = root
+	local tl = Instance.new("PointLight")
+	tl.Color = THRUST_COLOR
+	tl.Range = 10
+	tl.Brightness = 0
+	tl.Shadows = false
+	tl.Parent = ta
+	local te = Instance.new("ParticleEmitter")
+	te.Color = ColorSequence.new(Color3.new(1, 1, 1), THRUST_COLOR)
+	te.LightEmission = 1
+	te.LightInfluence = 0
+	te.EmissionDirection = Enum.NormalId.Bottom
+	te.Speed = NumberRange.new(7, 12)
+	te.SpreadAngle = Vector2.new(14, 14)
+	te.Lifetime = NumberRange.new(0.25, 0.45)
+	te.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 0.2) })
+	te.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+	te.Rate = 0
+	te.Parent = ta
+	thrustLight, thrustEmitter = tl, te
+
+	-- nav lights: the leftmost rotor cap blinks red, the rightmost green
+	table.clear(navLights)
+	local leftCap: BasePart?, rightCap: BasePart? = nil, nil
+	local minX, maxX = math.huge, -math.huge
+	for _, r in (m:FindFirstChild("Rotors") :: Instance):GetChildren() do
+		local cap = r:FindFirstChild("Cap")
+		if cap and cap:IsA("BasePart") then
+			local x = (root :: BasePart).CFrame:PointToObjectSpace(cap.Position).X
+			if x < minX then minX, leftCap = x, cap end
+			if x > maxX then maxX, rightCap = x, cap end
+		end
+	end
+	for _, pair in { { leftCap, NAV_LEFT, 0 }, { rightCap, NAV_RIGHT, 0.5 } } do
+		local cap = pair[1] :: BasePart?
+		if cap then
+			cap.Material = Enum.Material.Neon
+			local pl = Instance.new("PointLight")
+			pl.Color = pair[2] :: Color3
+			pl.Range = 5
+			pl.Brightness = 0
+			pl.Shadows = false
+			pl.Parent = cap
+			table.insert(navLights, { part = cap, light = pl, color = pair[2] :: Color3, phase = pair[3] :: number })
+		end
+	end
+	deployLeft, navT = DEPLOY_TIME, 0
+
 	m.Parent = workspace:FindFirstChild("FlightSpace") or workspace
 	model = m
 end
@@ -289,11 +366,31 @@ local function updateModel(dt: number)
 		* CFrame.Angles(0, 0, -state.tilt + bounceTilt)
 		* POSE
 	root.CFrame = cf
+	-- deploy: rotors spin up from rest, glow and nav lights come on
+	deployLeft = math.max(0, deployLeft - dt)
+	local k = deployLeft / DEPLOY_TIME
+	local spinUp = 1 - k * k
 	-- rotors: faster when moving
 	local speed = math.sqrt(state.vx * state.vx + state.vy * state.vy)
-	rotorAngle = (rotorAngle + dt * (32 + speed * 0.5)) % (math.pi * 2)
+	rotorAngle = (rotorAngle + dt * (32 + speed * 0.5) * spinUp) % (math.pi * 2)
 	for _, r in rotors do
 		r.motor.C0 = r.base * CFrame.fromAxisAngle(r.axis, rotorAngle * r.dir)
+	end
+	-- thruster glow: idle hover glow, brighter with speed and when climbing
+	if thrustLight and thrustEmitter then
+		local maxV = F.maxSpeed * state.speedMult
+		local push = math.clamp(speed / maxV, 0, 1)
+		local climb = math.clamp(state.vy / maxV, 0, 1)
+		local power = (0.25 + 0.55 * push + 0.3 * climb) * spinUp * (if state.diving then 0.3 else 1)
+		thrustLight.Brightness = 0.4 + 2.4 * power
+		thrustEmitter.Rate = 6 + 54 * power
+	end
+	-- nav lights: short blinks, left and right half a cycle apart; on once deployed halfway
+	navT += dt
+	for _, n in navLights do
+		local lit = spinUp > 0.5 and ((navT / NAV_PERIOD + n.phase) % 1) * NAV_PERIOD < NAV_ON
+		n.part.Color = if lit then n.color else n.color:Lerp(Color3.new(0, 0, 0), 0.6)
+		n.light.Brightness = if lit then 3 else 0
 	end
 end
 
@@ -336,6 +433,8 @@ function FlightController.finish()
 	if model then model:Destroy() end
 	model, root, nozzle = nil, nil, nil
 	table.clear(rotors)
+	table.clear(navLights)
+	thrustLight, thrustEmitter = nil, nil
 	for _, fx in fxEmitters do
 		fx.emitter.Rate = 0
 		fx.emitter:Clear()
