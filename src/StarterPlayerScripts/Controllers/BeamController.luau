@@ -382,6 +382,11 @@ function BeamController.update(dt: number, held: boolean, aimPoint: Vector3?, fl
 				l.progress = math.max(0, l.progress - 0.06)
 				BeamController.Struggle:Fire(l)
 			end
+			-- Epic blink: link breaks, it jumps out of the cone (CreatureSimClient.tryBlink)
+			if CreatureSimClient.tryBlink(l, nx, ny) then
+				if l == best then best = nil end
+				continue
+			end
 			if l.progress >= 1 then
 				l.progress = 1
 				requestCatch(l)

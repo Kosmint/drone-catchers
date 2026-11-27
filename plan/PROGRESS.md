@@ -53,6 +53,7 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [x] Drone polish (#31 → PR #37): white outline, thruster glow/trail by speed, red/green blinking nav lights, rotor spin-up on deploy.
 - [x] Earth redraw (#30 → PR #36), see above.
 - [~] Mission Control HUD (#24 → PR #38, Çağan/Gemini): waiting for the lead's Studio check.
+- [~] Epic blink (#43 → PR #44, Kosmint/Claude): Epics blink 1–2× behind/left/right of the drone while pulled (link breaks, re-aim), deterministic per seed + spawn, server adds the blink time to the Epic minimum catch time; tunables in `Balance.epicBlink`. Waiting for the lead's Studio check.
 - [ ] Catch Card (#23, Kosmint/Gemini): not started yet (Kosmint's Gemini runner off).
 - [ ] Scanner (#29, Çağan/Gemini): after the HUD.
 - [ ] Mobile check (#32, lead): last.
