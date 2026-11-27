@@ -23,7 +23,7 @@ User: scrap the painted sky, the 3D clouds and the whole Storm Layer; copy the a
 - [x] Deviation from the demo: depth-1 clouds sit 1 stud *behind* the drone plane (in the demo they could hide the drone).
 - [x] StormController deleted. Old scenery (painted sky, Clouds3D, Storm3D, SkyFX) parked in `ServerStorage.OldScenery` (`*_scrapped2`) — delete after the user approves the new look.
 - [ ] User approval of the demo-style sky (screenshots: deploy / Sunset Heights / Edge of Space).
-- [ ] Earth wedges are soft-edged (1 low-res image) → re-render in 2–3 tiles if the user wants it crisper. Ground hills/base from the demo not ported (user earlier: no green ground).
+- [x] Earth redrawn (#30): faceted low-poly globe (ocean, original continents, polar ice, cloud streaks) in 2 tiles of 990×607 px instead of the demo wedges; colours pre-toned for the Edge of Space colour correction. **Needs the humans' OK (style change vs. the demo).** Ground hills/base from the demo not ported (user earlier: no green ground).
 
 ## Stage 2 checklist (older items below the reset are superseded where they mention painted/3D clouds or the Storm Layer)
 - [x] Creatures move in 3D: yaw follows travel (turns through a 3/4 view toward the camera), pitch up/down with climb/sink, bank into turns, strain away from the drone while beamed.
