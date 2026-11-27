@@ -10,6 +10,7 @@
 -- Everything here is client-only and rebuilt per flight.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Lighting = game:GetService("Lighting")
 
 local Shared = ReplicatedStorage.Shared
 local Balance = require(Shared.Config.Balance)
@@ -43,6 +44,8 @@ local moonCard: ScreenCard? = nil
 local moonLabel: ImageLabel? = nil
 local earthCard: ScreenCard? = nil
 local earthLabels: { ImageLabel } = {} -- left + right tile
+-- Roblox's own sun/moon are hidden during a flight (the demo sky has its own); restored after.
+local savedCelestial: boolean? = nil
 
 local function clamp01(v: number): number
 	return math.clamp(v, 0, 1)
@@ -162,9 +165,23 @@ local function buildMountains()
 	end
 end
 
+-- Screen-card distances from the camera (studs). Kept JUST behind the farthest world layer
+-- (mountains, depth 0.3 = CAM_DIST / 0.3 ≈ 327) and as close as possible: at low graphics
+-- quality Roblox stops drawing far geometry (it was cut between 337 and 500 studs in a test),
+-- and the old 600-1200 put the whole sky out of reach on phones (#51). Cards are camera-locked
+-- and sized by depth in placeScreen, so these numbers only set the draw order.
+local DEPTH = {
+	gradient = CAM_DIST / 0.3 + 23, -- farthest
+	stars = CAM_DIST / 0.3 + 19,
+	sun = CAM_DIST / 0.3 + 16,
+	moon = CAM_DIST / 0.3 + 13,
+	planet = CAM_DIST / 0.3 + 10,
+	earth = CAM_DIST / 0.3 + 5, -- nearest sky card, still behind the mountains
+}
+
 local function buildScreenLayers()
 	-- sky gradient (farthest)
-	local gc = screenCard("SkyGradient", 1200, Vector2.new(64, 64))
+	local gc = screenCard("SkyGradient", DEPTH.gradient, Vector2.new(64, 64))
 	local frame = Instance.new("Frame")
 	frame.Size = UDim2.fromScale(1, 1)
 	frame.BackgroundColor3 = Color3.new(1, 1, 1)
@@ -176,7 +193,7 @@ local function buildScreenLayers()
 	gradientCard, gradient = gc, ug
 
 	-- stars: 180 twinkling dots on a camera-locked card (demo: 0.03 parallax, wrap around)
-	local sc = screenCard("Stars", 1150, Vector2.new(1240 * 2.4, 1240))
+	local sc = screenCard("Stars", DEPTH.stars, Vector2.new(1240 * 2.4, 1240))
 	starCard = sc
 	local srng = Random.new(3)
 	for _ = 1, 180 do
@@ -191,18 +208,18 @@ local function buildScreenLayers()
 		table.insert(stars, { frame = f, x = srng:NextNumber(), y = srng:NextNumber(), s = s, tw = srng:NextNumber(0, 6) })
 	end
 
-	local sun = screenCard("SunGlow", 1100, Vector2.new(256, 256))
+	local sun = screenCard("SunGlow", DEPTH.sun, Vector2.new(256, 256))
 	sunCard, sunLabel = sun, newImage(sun.gui, SkyArt.sunGlow)
 
-	local mc = screenCard("Moon", 1000, Vector2.new(240, 240))
+	local mc = screenCard("Moon", DEPTH.moon, Vector2.new(240, 240))
 	moonCard, moonLabel = mc, newImage(mc.gui, SkyArt.moon.image)
 
-	local pc = screenCard("Planet", 950, Vector2.new(512, 300))
+	local pc = screenCard("Planet", DEPTH.planet, Vector2.new(512, 300))
 	planetCard, planetLabel = pc, newImage(pc.gui, SkyArt.planet.image)
 
 	-- Earth: two tiles side by side on one card (each under Roblox's 1024 px limit, crisp limb)
 	local art = SkyArt.earth
-	local ec = screenCard("Earth", 600, Vector2.new(art.pxW, art.pxH))
+	local ec = screenCard("Earth", DEPTH.earth, Vector2.new(art.pxW, art.pxH))
 	earthCard, earthLabels = ec, {}
 	for i, image in art.images do
 		local l = newImage(ec.gui, image)
@@ -227,12 +244,20 @@ function SkyController.begin()
 	buildClouds()
 	buildMountains()
 	f.Parent = space
+	local skyObj = Lighting:FindFirstChildOfClass("Sky")
+	if skyObj then
+		savedCelestial = skyObj.CelestialBodiesShown
+		skyObj.CelestialBodiesShown = false
+	end
 	SkyController.update(0)
 end
 
 function SkyController.finish()
 	if folder then folder:Destroy() end
 	folder = nil
+	local skyObj = Lighting:FindFirstChildOfClass("Sky")
+	if skyObj and savedCelestial ~= nil then skyObj.CelestialBodiesShown = savedCelestial end
+	savedCelestial = nil
 	table.clear(stars)
 	gradientCard, gradient, starCard = nil, nil, nil
 	sunCard, sunLabel, planetCard, planetLabel = nil, nil, nil, nil
@@ -298,7 +323,8 @@ function SkyController.update(dt: number)
 			moonLabel.ImageTransparency = 1 - ma
 			local r = 26
 			local size = SkyArt.moon.pxW / SkyArt.moon.radiusPx * r
-			placeScreen(moonCard, wUnits * 0.2 - cx * 0.015, VIEW_UNITS * 0.2 + (alt - 4300) * 0.015, size, size)
+			placeScreen(moonCard, wUnits * 0.3 - cx * 0.015, -- 0.3: clear of the HUD panels (top-left)
+				VIEW_UNITS * 0.2 + (alt - 4300) * 0.015, size, size)
 		end
 	end
 
