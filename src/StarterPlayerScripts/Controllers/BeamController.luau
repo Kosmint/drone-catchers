@@ -242,8 +242,9 @@ local function requestCatch(l: CreatureSimClient.Live)
 			CreatureSimClient.confirmCatch(l, info)
 			CatchEvents.Caught:Fire(info, l)
 		else
-			CreatureSimClient.rejectCatch(l)
-			if ok and typeof(res) == "table" and res.reason == "full" then
+			local reason = if ok and typeof(res) == "table" and typeof(res.reason) == "string" then res.reason else nil
+			CreatureSimClient.rejectCatch(l, reason)
+			if reason == "full" then
 				BeamController.CargoFull:Fire()
 			end
 		end

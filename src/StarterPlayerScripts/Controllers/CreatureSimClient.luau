@@ -13,6 +13,7 @@ local Balance = require(Shared.Config.Balance)
 local Creatures = require(Shared.Config.Creatures)
 local Rarities = require(Shared.Config.Rarities)
 local SpawnGen = require(Shared.SpawnGen)
+local SpawnWindow = require(Shared.SpawnWindow)
 local EpicBlink = require(Shared.EpicBlink)
 local CatchEvents = require(script.Parent.CatchEvents)
 
@@ -59,6 +60,7 @@ export type Live = {
 	blinkToX: number,
 	blinkToY: number,
 	blinkScaled: boolean, -- model is currently scaled by the blink effect
+	leaving: number, -- seconds left of the fly-away after the server refused it for good (0 = not leaving)
 	scale: number,
 	model: Model?,
 	root: BasePart?,
@@ -84,6 +86,10 @@ local MAX_PITCH = math.rad(55)
 local HIDDEN = CFrame.new(0, -10000, 0)
 local INTAKE_TIME = 0.45 -- seconds from confirmed catch to swallowed
 local FLASH_TIME = 0.22
+local LEAVE_TIME = 0.6 -- fly-away + shrink-out after a final server refusal
+local LEAVE_SPEED = 14
+-- server refusals that can never turn into a catch: let the creature go for good
+local FINAL_REJECT = { inactive = true, gone = true, norun = true, bad = true }
 
 -- intake flash: one part per run (light + sparkles), reused for every catch
 local flash: BasePart? = nil
@@ -189,6 +195,7 @@ local function activate(s: SpawnGen.Spawn)
 		catchInfo = nil,
 		blink = if EpicBlink.applies(rarity.id) then EpicBlink.plan(runSeed, s.id) else nil,
 		blinksDone = 0, regrab = 0, vanish = 0, appear = 1, blinkToX = 0, blinkToY = 0, blinkScaled = false,
+		leaving = 0,
 		revealed = not (def.behavior == "Hidden" and Balance.scanner.hideHidden),
 		scale = scaleFor(rarity),
 		model = nil, root = nil, light = nil, done = false,
@@ -207,18 +214,16 @@ local function activate(s: SpawnGen.Spawn)
 	table.insert(live, l)
 end
 
--- activate the next queued spawn in a zone (whole swarm groups at once)
+-- activate the next queued spawn in a zone (whole swarm groups at once; the server
+-- tracks the same window through Shared/SpawnWindow)
 local function activateNext(zoneId: string)
 	local zq = zoneQueues[zoneId]
 	if not zq then return end
-	local s = zq.queue[zq.nextIndex]
-	if not s then return end
-	local group = s.group
-	repeat
-		activate(s)
-		zq.nextIndex += 1
-		s = zq.queue[zq.nextIndex]
-	until not s or s.group ~= group
+	local to = SpawnWindow.advance(zq.queue, zq.nextIndex)
+	for i = zq.nextIndex, to - 1 do
+		activate(zq.queue[i])
+	end
+	zq.nextIndex = to
 end
 
 local function buildBlinkFx(parent: Instance): BlinkFx
@@ -296,8 +301,9 @@ function CreatureSimClient.begin(plan: SpawnGen.Plan)
 	blinkFx = { buildBlinkFx(f), buildBlinkFx(f) }
 	for _, zp in plan.zones do
 		zoneQueues[zp.zone] = { queue = zp.queue, nextIndex = 1, from = zp.from, to = zp.to }
-		-- activate exactly `active` entries (a swarm straddling the limit comes in whole)
-		while zoneQueues[zp.zone].nextIndex <= zp.active do
+		-- activate `active` entries (a swarm straddling the limit comes in whole), same as the server
+		local to = SpawnWindow.initial(zp.queue, zp.active)
+		while zoneQueues[zp.zone].nextIndex < to do
 			activateNext(zp.zone)
 		end
 	end
@@ -325,7 +331,7 @@ end
 
 -- Can the beam (and auto-aim) target it right now?
 function CreatureSimClient.isTargetable(l: Live): boolean
-	return l.revealed and not l.caught and not l.pending and l.regrab <= 0
+	return l.revealed and not l.caught and not l.pending and l.regrab <= 0 and l.leaving <= 0
 end
 
 -- Called by the beam after it adds progress. An Epic that crosses its next blink
@@ -366,9 +372,21 @@ function CreatureSimClient.confirmCatch(l: Live, info: CatchEvents.CatchInfo)
 	activateNext(l.spawn.zone)
 end
 
--- server refused (or cargo full): let it go again
-function CreatureSimClient.rejectCatch(l: Live)
+-- Server refused. reason = the server's reply reason (nil = no reply / call failed).
+-- "inactive" / "gone" / "norun" / "bad" can never become a catch: the creature flies
+-- away and shrinks out (not caught, not beamable, no refill). Anything else ("fast",
+-- "full", "early", no reply): let it go again, the beam can retry.
+function CreatureSimClient.rejectCatch(l: Live, reason: string?)
 	l.pending = false
+	if reason and FINAL_REJECT[reason] then
+		l.leaving = LEAVE_TIME
+		l.progress = 0
+		l.beamed = false
+		l.vanish, l.appear = 0, 1
+		local g = groups[l.spawn.group]
+		if g then g.members -= 1 end
+		return
+	end
 	l.progress = 0.55
 end
 
@@ -493,6 +511,14 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 				local info = l.catchInfo
 				if info then CatchEvents.Landed:Fire(info) end
 			end
+		elseif l.leaving > 0 then
+			-- refused for good: fly away from the drone (and a bit up), then gone
+			l.leaving -= dt
+			local dx, dy = l.x - droneX, l.y - droneY
+			local d = math.max(0.01, math.sqrt(dx * dx + dy * dy))
+			l.x += dx / d * LEAVE_SPEED * dt
+			l.y += (dy / d * LEAVE_SPEED * 0.75 + 2) * dt
+			if l.leaving <= 0 then l.done = true end
 		elseif not l.pending and l.vanish <= 0 then
 			stepBehaviour(l, dt, droneX, droneY, droneSpeed)
 		end
@@ -566,6 +592,12 @@ function CreatureSimClient.update(dt: number, droneX: number, droneY: number, dr
 			if l.caught then
 				-- intake pulse (scale is restored on release)
 				(l.model :: Model):ScaleTo(math.max(0.05, l.scale * shrink))
+			elseif l.leaving > 0 then
+				-- flying away: shrink out (eased), scale is restored on release
+				local k = l.leaving / LEAVE_TIME
+				local m = l.model :: Model
+				m:ScaleTo(math.max(0.05, l.scale * k * (2 - k)))
+				l.blinkScaled = true
 			elseif l.vanish > 0 or l.appear < 1 then
 				-- blink: shrink out, then pop back in with a small overshoot
 				local a = l.appear
