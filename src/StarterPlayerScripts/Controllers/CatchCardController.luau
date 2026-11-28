@@ -316,7 +316,7 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 	-- header + thin cyan accent line
 	label({
 		Name = "Header",
-		Text = if big then "INCREDIBLE CATCH!" elseif tier >= 4 then "AMAZING CATCH!" else "RARE CATCH!",
+		Text = if big then "INCREDIBLE CATCH!" elseif tier >= 4 then "AMAZING CATCH!" else "GREAT CATCH!",
 		Font = FONT,
 		TextSize = 13,
 		TextColor3 = C.cyan,
