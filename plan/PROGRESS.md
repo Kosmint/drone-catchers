@@ -56,14 +56,20 @@ User showed two painted sunrise/sea-of-clouds references (style only — not cop
 - [x] Catch Card (#23 → PR #41, Kosmint/Claude): spinning creature viewport, rarity gradient, modifier/size chips, T4 shine, T5 big card + glow, queue, 4 s auto-close; right side on PC, top-right on touch (clear of BEAM/RECALL).
 - [x] Epic blink (#43 → PR #44, from Kosta's playtest): Epics teleport behind/left/right of the drone 1–2 times while pulled; deterministic from the run seed (`Shared/EpicBlink`), server minimum catch time updated, tunables in `Balance.epicBlink`.
 - [x] Earth sinks as you climb (#42 → PR #46, bug from Kosta's playtest): bottom third at Edge of Space entry → bottom fifth at 600 studs (`SkyArt.earth` fill/scale).
-- [ ] Scanner (#29, Çağan/Gemini): assigned 2026-11-27.
-- [ ] HUD polish: "MAX LIMIT" tag overlaps "Edge of Space" at the top engine level (#47, Kosmint/Gemini).
-- [ ] Mobile check of everything (#32, lead): after the scanner.
-- [ ] Stage 2 gate: screenshots + summary, 2 of the 3 humans approve; then delete `ServerStorage.OldScenery`.
-- Open questions for the humans: drone size (~11% of the screen height; bigger = more readable, but moves the beam nozzle); T5 pink screen and disc-looking rings (#35) to judge while playing.
+- [x] Scanner (#29 → PR #49, Çağan/Gemini): range ring (sweep look), edge blips (rarity colour inside range, neutral `?` beyond, ×N merge, clear of HUD panels), rarity rings, Hidden reveal only when in range **and** on screen (lead night decision; ranges unchanged). Reveal shimmer not yet seen in a playtest (no Aurora Wisp spawned).
+- [x] HUD polish: MAX LIMIT tag no longer overlaps zone names at any engine level (#47 → PR #78, Kosmint/Gemini).
+- [x] Sky at low graphics quality (#51 → PR #53, lead): sky cards moved to ~332–350 studs (Roblox culled them beyond ~337–500 at low/automatic quality = phones), Roblox sun/moon hidden in flight, moon x 0.2 → 0.3 clear of the HUD.
+- [x] Hollow celebration rings + lighter T5 colour shift (#50 → PR #52); Epic card header "GREAT CATCH!" (#55 → PR #56).
+- [x] Catch validation fix (#71 → PR #79): server and client share `Shared/SpawnWindow` (whole swarm groups per catch); final rejections fly away instead of endless re-pulls; swarm multi-pull no longer refused as "fast". 14/14 real catches accepted in Studio.
+- [x] Phone perf: cached input device, drone lights `Enabled` instead of brightness 0 (#80 → PR #82).
+- [x] Luau unit tests run from `scripts/tests/Run-Tests.ps1` with lune (`rokit install`): SpawnWindow, EpicBlink, Stats specs (#81 → PR #83).
+- [ ] Night bug/perf sweep follow-ups: #72 tow fee on slow phones, #74 Catch Cards after run end, #75 anti-cheat timing/reachability (assigned 2026-11-28); #73 T5 grade cut early, #76/#77 phone perf (next).
+- [ ] Mobile check of everything (#32, lead): needs a human to pick a phone in the Device Simulator (the MCP can toggle it but not choose a device).
+- [ ] Stage 2 gate (#54): screenshots + summary + night decisions posted 2026-11-28; waiting for 2 of the 3 humans; then delete `ServerStorage.OldScenery`.
+- Open questions for the humans (on #54): sky approval; drone size (~11% of the screen height; bigger = more readable, but moves the beam nozzle); T5 pink screen (lighter since #52). Stage 3: lightning placement (proposal: upper Sunset Heights), skippable re-entry (proposal: no). Stage 3 draft Issues #58–#70 (unassigned).
 - Scenery is ~1,150 static parts (no shadows). Watch mobile perf in Stage 14.
 - [x] Rojo live-sync on (#12): Rojo 7.7.1 (`rokit.toml`), plugin 7.7.1, `servePlaceIds` locked to this place, `.luau` at LF. First connect changed nothing (33 scripts hash-identical before and after). From now on `src/` is the source of truth; only the lead syncs (see `AGENTS.md`).
-**Last session:** 2026-11-27 (evening) — PRs #38 HUD, #41 Catch Card, #44 Epic blink, #46 Earth fix merged after Studio tests on PC + phone (Device Simulator); T3+ toast off; rule: only the lead edits PROGRESS (#45).
+**Last session:** 2026-11-28 (night, lead autonomous): gate #54 opened; PRs #49 #52 #53 #56 #57 #78 #79 #82 #83 tested (PC) and merged in the morning; bug/perf sweep → #71–#77; Stage 3 drafts #58–#70.
 
 ## Stage 1 checklist
 - [x] Demo feel ported 1:1 at **0.1 studs per demo unit** (demo showed 620 units vertically = 62 studs on screen): accel 125, drag 2.6, max 43 studs/s, tilt, bob, thin air, soft walls, ceiling spring, floor. Zones are 200 studs tall (= 2000 demo units). *User must confirm it feels the same.*
