@@ -59,8 +59,8 @@ return {
 	},
 	scanner = {
 		-- true = Hidden creatures stay invisible and unbeamable until the scanner reveals them
-		-- (CreatureSimClient.reveal). Off until the scanner ships, so they stay catchable.
-		hideHidden = false,
+		-- (CreatureSimClient.reveal).
+		hideHidden = true,
 	},
 	battery = {
 		lowThreshold = 0.25,

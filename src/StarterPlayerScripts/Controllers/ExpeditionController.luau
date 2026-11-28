@@ -24,6 +24,7 @@ local HUDController = require(Controllers.HUDController)
 local SkyController = require(Controllers.SkyController)
 local CatchEvents = require(Controllers.CatchEvents)
 local TimeScale = require(Controllers.TimeScale)
+local ScannerController = require(Controllers.ScannerController)
 
 local player = Players.LocalPlayer
 local ORIGIN = Balance.flight.origin
@@ -103,6 +104,8 @@ local function stepFlight(rawDt: number)
 			HUDController.toast("Battery low: recall soon", DANGER, true)
 		end
 	end
+
+	ScannerController.update(dt, fs, run)
 end
 
 local function connectLoop()
