@@ -24,6 +24,7 @@ local Modifiers = require(Shared.Config.Modifiers)
 local NumberFormat = require(Shared.Util.NumberFormat)
 local Trove = require(Shared.Util.Trove)
 
+local CameraController = require(script.Parent.CameraController)
 local CatchEvents = require(script.Parent.CatchEvents)
 
 local AUTO_CLOSE = 4 -- seconds a card stays up without a tap
@@ -54,6 +55,7 @@ local CatchCardController = {}
 
 local queue: { CatchEvents.CatchInfo } = {}
 local showing = false
+local closeCurrent: (() -> ())? = nil
 
 ----------------------------------------------------------------------------
 -- builders
@@ -185,7 +187,7 @@ end
 ----------------------------------------------------------------------------
 -- the card
 ----------------------------------------------------------------------------
-local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -> ())
+local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -> ()): () -> ()
 	local playerGui = Players.LocalPlayer:FindFirstChildOfClass("PlayerGui")
 	assert(playerGui, "no PlayerGui")
 	local rarity = info.rarity
@@ -535,6 +537,7 @@ local function buildCard(info: CatchEvents.CatchInfo, trove: any, onClosed: () -
 		if os.clock() - openedAt >= TAP_GRACE then close() end
 	end)
 	trove:Add(task.delay(AUTO_CLOSE, close))
+	return close
 end
 
 ----------------------------------------------------------------------------
@@ -549,15 +552,18 @@ local function show(info: CatchEvents.CatchInfo)
 		if closed then return end
 		closed = true
 		showing = false
+		closeCurrent = nil
 		CatchEvents.CardClosed:Fire(info)
 		pump()
 	end
-	local ok, err = pcall(buildCard, info, trove, onClosed)
+	local ok, result = pcall(buildCard, info, trove, onClosed)
 	if not ok then
 		-- never block the flow: a broken card is cleaned up and counts as closed
-		warn("[CatchCardController] card failed: " .. tostring(err))
+		warn("[CatchCardController] card failed: " .. tostring(result))
 		trove:Clean()
 		onClosed()
+	elseif not closed and typeof(result) == "function" then
+		closeCurrent = result :: () -> ()
 	end
 end
 
@@ -567,11 +573,37 @@ function pump()
 	show(table.remove(queue, 1) :: CatchEvents.CatchInfo)
 end
 
+local function clearQueueAndClose()
+	table.clear(queue)
+	if closeCurrent then
+		local close = closeCurrent
+		closeCurrent = nil
+		close()
+	end
+end
+
 function CatchCardController.init()
 	CatchEvents.CardRequested:Connect(function(info: CatchEvents.CatchInfo)
+		if not info.isTest and not CameraController.isFlight() then return end
 		table.insert(queue, info)
 		pump()
 	end)
+
+	-- run end / leaving flight: drop queued cards and slide out any open card
+	local camConn: RBXScriptConnection? = nil
+	local function hookCamera()
+		if camConn then
+			camConn:Disconnect()
+			camConn = nil
+		end
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		camConn = cam:GetPropertyChangedSignal("CameraType"):Connect(function()
+			if not CameraController.isFlight() then clearQueueAndClose() end
+		end)
+	end
+	hookCamera()
+	workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(hookCamera)
 end
 
 return CatchCardController
