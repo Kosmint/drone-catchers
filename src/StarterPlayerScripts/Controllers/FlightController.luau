@@ -68,7 +68,7 @@ local NAV_RIGHT = Color3.fromRGB(80, 255, 150)
 local NAV_PERIOD = 1.1 -- seconds per blink cycle
 local NAV_ON = 0.14 -- seconds lit per cycle
 local DEPLOY_TIME = 0.8
-type NavLight = { part: BasePart, light: PointLight, color: Color3, phase: number }
+type NavLight = { part: BasePart, light: PointLight, color: Color3, phase: number, lit: boolean }
 local navLights: { NavLight } = {}
 local thrustLight: PointLight? = nil
 local thrustEmitter: ParticleEmitter? = nil
@@ -302,7 +302,8 @@ local function spawnModel()
 	local tl = Instance.new("PointLight")
 	tl.Color = THRUST_COLOR
 	tl.Range = 10
-	tl.Brightness = 0
+	tl.Brightness = 0.4
+	tl.Enabled = false
 	tl.Shadows = false
 	tl.Parent = ta
 	local te = Instance.new("ParticleEmitter")
@@ -338,10 +339,11 @@ local function spawnModel()
 			local pl = Instance.new("PointLight")
 			pl.Color = pair[2] :: Color3
 			pl.Range = 5
-			pl.Brightness = 0
+			pl.Brightness = 3
+			pl.Enabled = false
 			pl.Shadows = false
 			pl.Parent = cap
-			table.insert(navLights, { part = cap, light = pl, color = pair[2] :: Color3, phase = pair[3] :: number })
+			table.insert(navLights, { part = cap, light = pl, color = pair[2] :: Color3, phase = pair[3] :: number, lit = true }) -- lit=true forces the first frame to write the dim state
 		end
 	end
 	deployLeft, navT = DEPLOY_TIME, 0
@@ -382,15 +384,21 @@ local function updateModel(dt: number)
 		local push = math.clamp(speed / maxV, 0, 1)
 		local climb = math.clamp(state.vy / maxV, 0, 1)
 		local power = (0.25 + 0.55 * push + 0.3 * climb) * spinUp * (if state.diving then 0.3 else 1)
-		thrustLight.Brightness = 0.4 + 2.4 * power
+		local on = power > 0.01
+		if thrustLight.Enabled ~= on then thrustLight.Enabled = on end
+		local b = 0.4 + 2.4 * power
+		if on and math.abs(thrustLight.Brightness - b) > 0.05 then thrustLight.Brightness = b end
 		thrustEmitter.Rate = 6 + 54 * power
 	end
 	-- nav lights: short blinks, left and right half a cycle apart; on once deployed halfway
 	navT += dt
 	for _, n in navLights do
 		local lit = spinUp > 0.5 and ((navT / NAV_PERIOD + n.phase) % 1) * NAV_PERIOD < NAV_ON
-		n.part.Color = if lit then n.color else n.color:Lerp(Color3.new(0, 0, 0), 0.6)
-		n.light.Brightness = if lit then 3 else 0
+		if lit ~= n.lit then
+			n.lit = lit
+			n.part.Color = if lit then n.color else n.color:Lerp(Color3.new(0, 0, 0), 0.6)
+			n.light.Enabled = lit
+		end
 	end
 end
 
