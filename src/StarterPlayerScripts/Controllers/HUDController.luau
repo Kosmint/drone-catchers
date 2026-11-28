@@ -996,6 +996,89 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 		Parent = track,
 	}, { corner(4) })
 
+	-- Layout constants in logical track pixels (Altimeter is 188x230, Track is -90 height = 140).
+	-- UIScale scales the whole ScreenGui uniformly, so logical pixel clearances match on PC and phone.
+	local TRACK_H = 140
+	local LABEL_H = 18
+	local LINE_H = 2
+	local LINE_GAP = 1
+	local CLEAR_GAP = 2
+	local TAG_MIN_Y = -6 -- stays below the header divider (y = -8..-7 in track coords)
+	local TAG_MAX_Y = TRACK_H - LABEL_H
+
+	local limY = yOf(maxAlt)
+	local limPx = limY * TRACK_H
+
+	local function bandSpill(p: number, bandTop: number, bandBot: number): number
+		return math.max(0, bandTop - p) + math.max(0, (p + LABEL_H) - bandBot)
+	end
+
+	type AltLayout = {
+		tagOffset: number,
+		labelTops: { number },
+		cost: number,
+	}
+
+	local function solveLayout(tagOffset: number): AltLayout?
+		local tagTop = limPx + tagOffset
+		if tagTop < TAG_MIN_Y or tagTop > TAG_MAX_Y then
+			return nil
+		end
+		local obsTop = math.min(limPx, tagTop)
+		local obsBot = math.max(limPx + LINE_H, tagTop + LABEL_H)
+
+		local labelTops: { number } = table.create(#zones, 0)
+		local totalCost = if tagTop < 0 then -tagTop * 2 else 0
+
+		for i, z in zones do
+			local bandTop = yOf(z.to) * TRACK_H
+			local bandBot = yOf(z.from) * TRACK_H
+			local ideal = (bandTop + bandBot) * 0.5 - LABEL_H * 0.5
+			local chosen = ideal
+
+			if ideal + LABEL_H > obsTop - CLEAR_GAP and ideal < obsBot + CLEAR_GAP then
+				local upPos = obsTop - CLEAR_GAP - LABEL_H
+				local downPos = obsBot + CLEAR_GAP
+				local upOk = upPos >= 0
+				local downOk = downPos + LABEL_H <= TRACK_H
+
+				if upOk and downOk then
+					local upCost = bandSpill(upPos, bandTop, bandBot) * 10 + math.abs(upPos - ideal)
+					local downCost = bandSpill(downPos, bandTop, bandBot) * 10 + math.abs(downPos - ideal)
+					chosen = if upCost <= downCost then upPos else downPos
+				elseif upOk then
+					chosen = upPos
+				elseif downOk then
+					chosen = downPos
+				else
+					chosen = math.clamp(ideal, 0, TRACK_H - LABEL_H)
+				end
+			end
+
+			labelTops[i] = chosen
+			totalCost += bandSpill(chosen, bandTop, bandBot) * 10 + math.abs(chosen - ideal)
+		end
+
+		-- Penalize any overlap between adjacent zone labels (zones are ordered bottom-to-top).
+		for i = #zones, 2, -1 do
+			if labelTops[i] + LABEL_H + CLEAR_GAP > labelTops[i - 1] then
+				totalCost += 1000
+			end
+		end
+
+		return {
+			tagOffset = tagOffset,
+			labelTops = labelTops,
+			cost = totalCost,
+		}
+	end
+
+	local aboveLayout = solveLayout(-(LABEL_H + LINE_GAP))
+	local belowLayout = solveLayout(LINE_H + LINE_GAP)
+	local layout: AltLayout? = if aboveLayout and belowLayout
+		then (if aboveLayout.cost <= belowLayout.cost then aboveLayout else belowLayout)
+		else (aboveLayout or belowLayout)
+
 	for i, z in zones do
 		local col = ZONE_COLORS[z.id] or C.muted
 		local yTop = yOf(z.to)
@@ -1023,13 +1106,17 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 			})
 		end
 
+		local labelPos = if layout
+			then UDim2.fromOffset(18, math.floor(layout.labelTops[i] + 0.5))
+			else UDim2.new(0, 18, yOf((z.from + z.to) / 2), -9)
+
 		label({
 			Text = z.name,
 			Font = FONT_BODY,
 			TextSize = 16,
 			TextColor3 = C.fg,
-			Position = UDim2.new(0, 18, yOf((z.from + z.to) / 2), -9),
-			Size = UDim2.new(1, -18, 0, 18),
+			Position = labelPos,
+			Size = UDim2.new(1, -18, 0, LABEL_H),
 			TextTruncate = Enum.TextTruncate.AtEnd,
 			ZIndex = 2,
 			Parent = track,
@@ -1037,17 +1124,16 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 	end
 
 	-- Engine-limit horizontal line + compact tag
-	local limY = yOf(maxAlt)
 	make("Frame", {
 		Name = "Limit",
 		BackgroundColor3 = C.danger,
 		BorderSizePixel = 0,
 		Position = UDim2.new(0, -3, limY, 0),
-		Size = UDim2.new(1, 3, 0, 2),
+		Size = UDim2.new(1, 3, 0, LINE_H),
 		ZIndex = 4,
 		Parent = track,
 	})
-	local tagOffset = if limY < 0.16 then 4 else -20
+	local tagOffset = if layout then layout.tagOffset else (LINE_H + LINE_GAP)
 	label({
 		Text = "MAX LIMIT",
 		TextSize = 16,
@@ -1056,7 +1142,7 @@ local function rebuildAltimeter(chapter: number, maxAlt: number)
 		TextStrokeTransparency = 0.35,
 		TextXAlignment = Enum.TextXAlignment.Right,
 		Position = UDim2.new(0, 0, limY, tagOffset),
-		Size = UDim2.new(1, 0, 0, 18),
+		Size = UDim2.new(1, 0, 0, LABEL_H),
 		ZIndex = 4,
 		Parent = track,
 	})
