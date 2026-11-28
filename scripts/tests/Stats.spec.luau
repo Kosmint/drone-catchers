@@ -3,110 +3,15 @@
 -- Run from the repo root:  lune run scripts/tests/Stats.spec.luau
 -- Exits with code 1 if a test fails.
 
-local fs = require("@lune/fs")
-local luau = require("@lune/luau")
 local process = require("@lune/process")
-local roblox = require("@lune/roblox")
+local MockShared = require("./lib/MockShared")
 
-local SHARED_DIR = if fs.isDir("src/ReplicatedStorage/Shared")
-	then "src/ReplicatedStorage/Shared"
-	elseif fs.isDir("../../src/ReplicatedStorage/Shared")
-	then "../../src/ReplicatedStorage/Shared"
-	else error("Cannot locate src/ReplicatedStorage/Shared from cwd: " .. process.cwd)
-
--- Minimal Roblox ModuleScript loader for src/ReplicatedStorage/Shared without editing src/.
-type Node = {
-	_path: string,
-	Parent: Node?,
-}
-
-local nodes: { [string]: Node } = {}
-local cache: { [string]: any } = {}
-local loadModule: (target: any) -> any
-
-local function getNode(path: string, parent: Node?): Node
-	if nodes[path] then
-		return nodes[path]
-	end
-	local node: any = { _path = path, Parent = parent }
-	setmetatable(node, {
-		__index = function(self: Node, key: string)
-			local childBase = self._path .. "/" .. key
-			if fs.isFile(childBase .. ".luau") then
-				return getNode(childBase .. ".luau", self)
-			elseif fs.isDir(childBase) then
-				return getNode(childBase, self)
-			end
-			error("Mock instance child not found: " .. childBase)
-		end,
-	})
-	nodes[path] = node
-	return node
-end
-
-local function makeEnv(scriptNode: Node): { [string]: any }
-	return {
-		assert = assert,
-		error = error,
-		getmetatable = getmetatable,
-		ipairs = ipairs,
-		next = next,
-		pairs = pairs,
-		pcall = pcall,
-		print = print,
-		rawequal = rawequal,
-		rawget = rawget,
-		rawlen = rawlen,
-		rawset = rawset,
-		select = select,
-		setmetatable = setmetatable,
-		tonumber = tonumber,
-		tostring = tostring,
-		type = type,
-		typeof = typeof,
-		unpack = unpack,
-		xpcall = xpcall,
-		bit32 = bit32,
-		buffer = buffer,
-		coroutine = coroutine,
-		math = math,
-		os = os,
-		string = string,
-		table = table,
-		utf8 = utf8,
-		_VERSION = _VERSION,
-		script = scriptNode,
-		require = function(target: any)
-			return loadModule(target)
-		end,
-		Vector3 = roblox.Vector3,
-		Color3 = roblox.Color3,
-	}
-end
-
-loadModule = function(target: any): any
-	assert(type(target) == "table" and type(target._path) == "string", "Expected mock module node")
-	local path = target._path
-	if cache[path] ~= nil then
-		return cache[path]
-	end
-	local source = fs.readFile(path)
-	local bytecode = luau.compile(source)
-	local chunk = luau.load(bytecode, {
-		debugName = path,
-		environment = makeEnv(target),
-		injectGlobals = false,
-	})
-	local result = chunk()
-	cache[path] = result
-	return result
-end
-
-local Shared: any = getNode(SHARED_DIR, nil)
-local Balance = loadModule(Shared.Config.Balance)
-local Upgrades = loadModule(Shared.Config.Upgrades)
-local Creatures = loadModule(Shared.Config.Creatures)
-local Stats = loadModule(Shared.Stats)
+local mock = MockShared.create()
+local Shared = mock.Shared
+local Balance = mock.require(Shared.Config.Balance)
+local Upgrades = mock.require(Shared.Config.Upgrades)
+local Creatures = mock.require(Shared.Config.Creatures)
+local Stats = mock.require(Shared.Stats)
 
 local failures = 0
 
