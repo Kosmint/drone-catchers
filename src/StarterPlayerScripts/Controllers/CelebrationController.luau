@@ -145,7 +145,7 @@ local function colorGrade(tint: Color3, seconds: number)
 	local mine = gradeGen
 	cc.Enabled = true
 	cc.TintColor = tint
-	cc.Saturation, cc.Contrast, cc.Brightness = 0.35, 0.18, 0.02
+	cc.Saturation, cc.Contrast, cc.Brightness = 0.2, 0.1, 0
 	TweenService:Create(cc, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
 		TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0, Brightness = 0,
 	}):Play()
@@ -234,27 +234,33 @@ local function burst(pos: Vector3, c1: Color3, c2: Color3, count: number, speed:
 	e:Emit(count)
 end
 
--- Expanding flat ring facing the side camera (+Z).
+-- Expanding hollow ring (stroke-only circle on a camera-facing BillboardGui): it frames the
+-- drone instead of covering it. Sizes are in studs.
 local function ring(pos: Vector3, color: Color3, startSize: number, endSize: number, seconds: number)
-	local p = Instance.new("Part")
-	p.Name = "CelebrationRing"
-	p.Shape = Enum.PartType.Cylinder
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanQuery = false
-	p.CanTouch = false
-	p.CastShadow = false
-	p.Material = Enum.Material.Neon
-	p.Color = color
-	p.Transparency = 0.4
-	-- cylinder axis is X; rotate so its flat face looks along Z
-	p.Size = Vector3.new(0.2, startSize, startSize)
-	p.CFrame = CFrame.new(pos) * CFrame.Angles(0, math.rad(90), 0)
-	p.Parent = workspace
-	TweenService:Create(p, TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-		Size = Vector3.new(0.2, endSize, endSize), Transparency = 1,
-	}):Play()
-	Debris:AddItem(p, seconds + 0.1)
+	local p = anchorPart(pos, seconds + 0.1)
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "CelebrationRing"
+	bb.Size = UDim2.fromScale(startSize, startSize) -- scale on a BillboardGui = studs
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	bb.Adornee = p
+	bb.Parent = p
+	local f = Instance.new("Frame")
+	f.Size = UDim2.fromScale(1, 1)
+	f.BackgroundTransparency = 1
+	f.BorderSizePixel = 0
+	f.Parent = bb
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0.5, 0)
+	corner.Parent = f
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = 6
+	stroke.Transparency = 0.15
+	stroke.Parent = f
+	local info = TweenInfo.new(seconds, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(bb, info, { Size = UDim2.fromScale(endSize, endSize) }):Play()
+	TweenService:Create(stroke, info, { Transparency = 1, Thickness = 2 }):Play()
 end
 
 local function lightPulse(pos: Vector3, color: Color3, brightness: number, seconds: number)
@@ -367,9 +373,9 @@ local function celebrate(info: CatchEvents.CatchInfo)
 		lightRays(pos, GOLD, 1.6)
 	elseif tierN >= 5 then
 		screenFlash(Color3.new(1, 1, 1), tier.flash, 0.8)
-		edgeGlow(c1, 0.8, 1.8)
+		edgeGlow(c1, 0.5, 1.8)
 		lightRays(pos, c2, 2.0)
-		colorGrade(lighten(c1, 0.55), 2.2)
+		colorGrade(lighten(c1, 0.85), 2.2)
 	end
 
 	if tier.card then
