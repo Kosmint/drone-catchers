@@ -49,6 +49,8 @@ local function allow(player: Player, name: string, def: Def): boolean
 	local now = os.clock()
 	local pb = buckets[player]
 	if not pb then
+		-- a request that arrives after PlayerRemoving would leak a bucket nobody clears
+		if player.Parent == nil then return false end
 		pb = {}
 		buckets[player] = pb
 	end

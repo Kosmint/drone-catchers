@@ -87,7 +87,11 @@ return {
 		batteryGrace = 6, -- extra seconds before the server assumes the battery died
 		timeoutExtra = 60, -- server force-ends a run this long after the battery must be empty
 		minCatchGap = 0.25,
-		resistGapFactor = 0.5, -- min seconds between catches >= resist / beamStrength * this
+		resistGapFactor = 0.85, -- min seconds between catches >= resist / beamStrength * this (lag slack, like epicBlink.minTimeFactor)
+		-- reachability (Shared/RunBounds): highest altitude after t seconds =
+		-- deployAltitude + maxSpeed * speedMult * reachSpeedSlack * t + reachSlackStuds
+		reachSpeedSlack = 1.1,
+		reachSlackStuds = 15, -- bobbing, frame steps, creatures drifting a little below their zone
 	},
 	sizes = {
 		enabled = true, -- size roll (plan/02_CONTENT.md §1d) — confirm with user in Stage 6

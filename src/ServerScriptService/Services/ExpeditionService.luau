@@ -23,6 +23,7 @@ local Stats = require(Shared.Stats)
 local SpawnGen = require(Shared.SpawnGen)
 local SpawnWindow = require(Shared.SpawnWindow)
 local EpicBlink = require(Shared.EpicBlink)
+local RunBounds = require(Shared.RunBounds)
 local DataService = require(script.Parent.DataService)
 local DebugService = require(script.Parent.DebugService)
 
@@ -128,7 +129,9 @@ local function finalize(player: Player, reason: string, peakAltitude: number?): 
 		st.totalRuns = (st.totalRuns or 0) + 1
 		st.totalCatches = (st.totalCatches or 0) + #run.cargo
 		if Guard.number(peakAltitude, 0, 1e6) then
-			local km = Chapters.toKm(run.chapter, math.min(peakAltitude :: number, run.maxAltitude))
+			-- capped by the rocket limit and by how high the drone can have flown in this time
+			local peak = RunBounds.clampPeak(peakAltitude :: number, elapsed, run.stats.speed, run.maxAltitude)
+			local km = Chapters.toKm(run.chapter, peak)
 			st.bestAltitude = math.max(st.bestAltitude or 0, math.floor(km * 10) / 10)
 		end
 		if fee > 0 then
@@ -216,7 +219,11 @@ local function onReportCatch(player: Player, runId: unknown, spawnId: unknown)
 	local creature = Creatures.byId[spawn.creature]
 	local rarity = Rarities.byId[creature.rarity]
 	if now - run.startedAt < 1 then return { ok = false, reason = "early" } end
-	local gap = math.max(Balance.expedition.minCatchGap, rarity.resist / run.stats.beamStrength * Balance.expedition.resistGapFactor)
+	-- could the drone have climbed to this zone yet? (beam range reaches above the drone)
+	if not RunBounds.canReachZone(zp.from, now - run.startedAt, run.stats.speed, run.stats.beamRange) then
+		return { ok = false, reason = "unreachable" }
+	end
+	local gap = RunBounds.minCatchGap(rarity.resist, run.stats.beamStrength)
 	-- swarm multi-pull: up to swarmMultiPull members of one group, pulled by the same beam,
 	-- finish together; they need no gap within SWARM_BURST_WINDOW of the burst's first catch
 	local inBurst = spawn.group == run.lastGroup
